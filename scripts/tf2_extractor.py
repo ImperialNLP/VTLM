@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from multiprocessing import Pool
 import argparse
+import bz2
 import gzip
 import pickle
 
@@ -53,6 +54,24 @@ def read_image_list(fname):
     return fnames
 
 
+def fn_picklegz(feat_dict, fname):
+    with gzip.GzipFile(fname, 'wb', compresslevel=2) as f:
+        pickle.dump(feat_dict, f, protocol=4, fix_imports=False)
+
+
+def fn_picklebz2(feat_dict, fname):
+    with bz2.BZ2File(fname, 'wb', compresslevel=1) as f:
+        pickle.dump(feat_dict, f, protocol=4, fix_imports=False)
+
+
+def fn_hickle(feat_dict, fname):
+    hickle.dump(feat_dict, fname, 'w', compression='lzf')
+
+
+def fn_npz(feat_dict, fname):
+    np.savez_compressed(fname, **feat_dict)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='tfobj-extractor')
     parser.add_argument('-m', '--model-folder', type=str,
@@ -76,35 +95,25 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Setup compressor
-    assert args.format in ("pickle", "hickle", "npz"), "Output file format unknown."
+    assert args.format.startswith(("pickle", "hickle", "npz")), "Output file format unknown."
 
-    if args.format == 'hickle' and not HICKLE:
-        print('Please install hickle i.e. `pip install hickle`')
-        sys.exit(1)
+    if args.format == 'picklegz':
+        dump_detections, dump_suffix = fn_picklegz, '.pgz'
+    elif args.format == 'picklebz2':
+        dump_detections, dump_suffix = fn_picklebz2, '.pbz2'
+    elif args.format == 'hickle':
+        if not HICKLE:
+            print('Please install hickle i.e. `pip install hickle`')
+            sys.exit(1)
+        dump_detections, dump_suffix = fn_hickle, '.hkl'
+    elif args.format == 'npz':
+        dump_detections, dump_suffix = fn_npz, '.npz'
 
     if 'oid_v4' in args.model_folder:
         num_classes = 601
     else:
         print('Only oid_v4 models are supported so far')
         sys.exit(1)
-
-    def get_dump_fn():
-        def _pickle(feat_dict, fname):
-            with gzip.GzipFile(fname, 'wb', compresslevel=2) as f:
-                pickle.dump(feat_dict, f, protocol=4, fix_imports=False)
-        def _hickle(feat_dict, fname):
-            hickle.dump(feat_dict, fname, 'w', compression='lzf')
-        def _npz(feat_dict, fname):
-            np.savez_compressed(fname, **feat_dict)
-
-        if args.format == 'pickle':
-            return _pickle, '.pkl.gz'
-        elif args.format == 'hickle':
-            return _hickle, '.hkl'
-        elif args.format == 'npz':
-            return _npz, '.npz'
-
-    dump_detections, dump_suffix = get_dump_fn()
 
     if args.parallel:
         pool = Pool(processes=2)
@@ -162,7 +171,6 @@ if __name__ == '__main__':
             except Exception as _:
                 problems[orig_img_name] = 'inference exception'
             else:
-                breakpoint()
                 dets = prepare_dict(
                     dets, class_offset=class_offset, num_proposals=args.num_proposals)
                 n_extracted += 1
