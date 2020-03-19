@@ -17,4 +17,4 @@ if __name__ == '__main__':
 
     with open('remaining', 'w') as f:
         for line in remaining:
-            f.write(f'{IMG_PATH}/{line}\n')
+            f.write(f'{line}\n')
