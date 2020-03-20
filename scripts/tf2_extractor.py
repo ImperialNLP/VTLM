@@ -116,7 +116,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     if args.parallel:
-        pool = Pool(processes=2)
+        pool = Pool(processes=3)
     else:
         pool = None
 
