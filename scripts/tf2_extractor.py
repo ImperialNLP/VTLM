@@ -156,34 +156,46 @@ if __name__ == '__main__':
     problems = {}
     n_total = len(image_list)
     n_extracted = 0
-    for idx, img in enumerate(tqdm.tqdm(dataset, total=len(image_list))):
+
+    # Convert it to iterator
+    itd = iter(dataset)
+    idxs = list(range(n_total))
+    for idx in tqdm.tqdm(idxs, ncols=50):
         orig_img_name = image_list[idx].split('/')[-1]
         # to be compatible with Hacettepe file naming (0-indexed)
         dump_img_name = str(int(orig_img_name) - args.img_offset)
         dump_fname = str(out_folder / dump_img_name) + dump_suffix
 
-        if img.shape.num_elements() < 100*100*3:
-            # image too small
-            problems[orig_img_name] = 'too small'
-        elif not os.path.exists(dump_fname):
-            try:
-                dets = model(img[None, ...])
-            except Exception as _:
-                problems[orig_img_name] = 'inference exception'
-            else:
-                dets = prepare_dict(
-                    dets, class_offset=class_offset, num_proposals=args.num_proposals)
-                n_extracted += 1
-                if pool:
-                    pool.apply_async(dump_detections, (dets, dump_fname))
+        try:
+            img = next(itd)
+        except StopIteration as exc:
+            print('Iterator exhausted. Done.')
+        except Exception as exc:
+            # Read failure
+            problems[orig_img_name] = 'image reading error'
+        else:
+            if img.shape.num_elements() < 100*100*3:
+                # image too small
+                problems[orig_img_name] = 'too small'
+            elif not os.path.exists(dump_fname):
+                try:
+                    dets = model(img[None, ...])
+                except Exception as exc:
+                    problems[orig_img_name] = 'inference exception'
                 else:
-                    dump_detections(dets, dump_fname)
+                    dets = prepare_dict(
+                        dets, class_offset=class_offset, num_proposals=args.num_proposals)
+                    n_extracted += 1
+                    if pool:
+                        pool.apply_async(dump_detections, (dets, dump_fname))
+                    else:
+                        dump_detections(dets, dump_fname)
 
     if len(problems) > 0:
         fname = str(out_folder).rstrip('/') + '.txt'
         with open(fname, 'w') as f:
             for img_name, prob in problems.items():
-                f.write(f'{img_name}\t{prob}')
+                f.write(f'{img_name}\t{prob}\n')
 
     print()
     print(f'# of total images requested: {n_total}')
