@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import os
+import bz2
 
 IMG_PATH = "/data/ozan/datasets/conceptual_captions/raw_files/images"
 
@@ -7,9 +8,9 @@ def read_extracted_files():
     extracted = []
 
     # 0-based filenames
-    files = [f for f in os.listdir('.') if f.endswith('.extracted')]
+    files = [f for f in os.listdir('.') if f.endswith('.extracted.bz2')]
     for fname in files:
-        with open(fname) as f:
+        with bz2.BZ2File(fname, 'rb') as f:
             for line in f:
                 # convert to 1-based
                 extracted.append(int(line.strip()) + 1)
@@ -28,3 +29,4 @@ if __name__ == '__main__':
     with open('remaining', 'w') as f:
         for line in remaining:
             f.write(f'{line}\n')
+    os.system('bzip2 -f remaining')
