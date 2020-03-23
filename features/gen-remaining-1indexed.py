@@ -30,9 +30,3 @@ if __name__ == '__main__':
         for line in remaining:
             f.write(f'{line}\n')
     os.system('bzip2 -f remaining')
-
-    rem_gt_2m = [x for x in remaining if x >= 2000000]
-
-    with open('remaining_gt_2M.txt', 'w') as f:
-        for line in rem_gt_2m:
-            f.write(f'{line}\n')
