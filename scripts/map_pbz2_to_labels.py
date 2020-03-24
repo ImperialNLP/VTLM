@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import pickle as pkl
+from pathlib import Path
 import bz2
 import sys
 
@@ -8,13 +9,17 @@ import sys
 
 if __name__ == '__main__':
     # Load labels
-    with open('metadata/oid_labels.pkl', 'rb') as f:
+    label_fname = Path('~/git/Animal/metadata/oid_labels.pkl').expanduser()
+    with open(str(label_fname), 'rb') as f:
         # 0-index labels [0, 600]
         labelmap = pkl.load(f)
 
     for pbz2 in sys.argv[1:]:
-        with bz2.BZ2File(pbz2, 'rb') as f:
-            dets = set(pkl.load(f)['detection_classes'])
-            lbls = [labelmap[lbl] for lbl in dets]
-            fname = pbz2.split('/')[-1].split('.')[0]
-            print(f'{fname:<10} {",".join(lbls)}')
+        fname = pbz2.split('/')[-1].split('.')[0]
+        try:
+            with bz2.BZ2File(pbz2, 'rb') as f:
+                dets = set(pkl.load(f)['detection_classes'])
+                lbls = [labelmap[lbl] for lbl in dets]
+                print(f'{fname:<10} {",".join(lbls)}')
+        except Exception as exc:
+            print(f'{fname} buggy!')

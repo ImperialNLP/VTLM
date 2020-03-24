@@ -1,9 +1,11 @@
+#!/usr/bin/env python
 """This script requires TensorFlow 2.x and a SavedModel export of obj-det
 models."""
 
 import os
 import sys
 import time
+import uuid
 from pathlib import Path
 from multiprocessing import Pool
 import argparse
@@ -192,7 +194,8 @@ if __name__ == '__main__':
                         dump_detections(dets, dump_fname)
 
     if len(problems) > 0:
-        fname = str(out_folder).rstrip('/') + '.txt'
+        randstr = str(uuid.uuid4()).split('-')[0]
+        fname = str(out_folder).rstrip('/') + f'{randstr}.txt'
         with open(fname, 'w') as f:
             for img_name, prob in problems.items():
                 f.write(f'{img_name}\t{prob}\n')
