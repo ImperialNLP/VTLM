@@ -12,7 +12,6 @@ import torch
 
 from .dataset import StreamDataset, Dataset, ParallelDataset,ParallelDatasetWithRegions
 from .dictionary import BOS_WORD, EOS_WORD, PAD_WORD, UNK_WORD, MASK_WORD
-import pickle
 
 logger = getLogger()
 
@@ -280,9 +279,7 @@ def load_vpara_data(params, data):
             src_path, tgt_path = params.para_dataset[(src, tgt)][splt]
             src_data = load_binarized(src_path, params)
             tgt_data = load_binarized(tgt_path, params)
-            img_data = []
-            good_indices = []
-            bad_indices = []
+            image_names = []
             src_data["dico"].word2id["<r>"] = len(src_data["dico"].word2id)
             src_data["dico"].id2word[len(src_data["dico"].word2id)-1] =  "<r>"
             src_data["dico"].counts["<r>"] = 0
@@ -297,37 +294,25 @@ def load_vpara_data(params, data):
             tgt_data["dico"].counts["</r>"] = 0
             params.bor_index = src_data["dico"].index("<r>")
             params.eor_index = src_data["dico"].index("</r>")
+            existing_indices = []
             with open(os.path.join(params.image_names,"image_names."+splt),"r") as img_names:
                 for i,line in enumerate(img_names):
                     line = line.strip()
                     line = line[:line.index(".")+1]
                     line = line + "pkl"
-                    try:
-                        with open(os.path.join(params.region_feats_path,line),"rb") as f:
-                            try:
+                    image_names.append(line)
+                    existing_indices.append(i)
 
-                                x = pickle.load(f)
-                                img_data.append(x)
-                                good_indices.append(i)
-                            except:
-                                bad_indices.append(line)
-                                pass
-                    except:
-                        pass
-            with open("bad_indices." + splt,"w+") as f:
-                for i in bad_indices:
-                    f.write(i + "\n")
             # update dictionary parameters
             set_dico_parameters(params, data, src_data['dico'])
             set_dico_parameters(params, data, tgt_data['dico'])
             # create ParallelDataset
 
-
+            existing_indices = np.array(existing_indices)
             dataset = ParallelDatasetWithRegions(
-                src_data['sentences'], src_data['positions'],
-                tgt_data['sentences'], tgt_data['positions'],
-                img_data,
-                np.array(good_indices),
+                src_data['sentences'], src_data['positions'][existing_indices],
+                tgt_data['sentences'], tgt_data['positions'][existing_indices],
+                image_names,
                 params
             )
 
@@ -351,6 +336,11 @@ def load_vpara_data(params, data):
             logger.info("")
 
     logger.info("")
+
+
+
+
+
 def check_data_params(params):
     """
     Check datasets parameters.

@@ -433,11 +433,6 @@ class TransformerModel(nn.Module):
         mask, attn_mask = get_masks(slen, lengths, causal)
         # mask = combined_mask[:,self.num_of_regions:]
 
-        # if len(np.where(mask.cpu().numpy() == 0)[0]) != 0:
-        #     print(lengths,slen)
-        #     print(np.where(mask.cpu().numpy() == 0))
-            # exit()
-
         img_mask = torch.ones([mask.shape[0], self.num_of_regions], dtype=torch.uint8).cuda()
         img_attn_mask = torch.ones([mask.shape[0], self.num_of_regions], dtype=torch.uint8).cuda()
         combined_mask = torch.cat((mask, img_mask), dim=1)
@@ -456,7 +451,6 @@ class TransformerModel(nn.Module):
         # langs
         if langs is not None:
             langs = langs.transpose(0, 1)
-            image_langs = image_langs.transpose(0, 1)
 
 
         tensor = self.embeddings(x)
@@ -469,7 +463,8 @@ class TransformerModel(nn.Module):
 
         # langs = torch.cat((langs.cuda(), image_langs.cuda()))
 
-        if img_dict is not None:
+        if img_dict is not None and image_langs is not None:
+            image_langs = image_langs.transpose(0, 1)
 
             #detection_classes
             image_regions = self.projector(get_image_properties(img_dict, "detection_features"))

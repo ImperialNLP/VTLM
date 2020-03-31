@@ -9,7 +9,8 @@ from logging import getLogger
 import math
 import numpy as np
 import torch
-
+import os
+import pickle
 
 logger = getLogger()
 
@@ -130,24 +131,6 @@ class Dataset(object):
 
         return sent, lengths
 
-    def batch_images(self, images, feat_type):
-        """
-        Take as input a list of n sentences (torch.LongTensor vectors) and return
-        a tensor of size (slen, n) where slen is the length of the longest
-        sentence, and a vector lengths containing the length of each sentence.
-        """
-        # sentences = sorted(sentences, key=lambda x: len(x), reverse=True)
-
-        lengths = torch.LongTensor([len(s[feat_type]) for s in images])
-        imgs = torch.LongTensor(lengths.max().item(), lengths.size(0)).fill_(self.pad_index)
-        # imgs[0] = self.bor_index
-        for i, img in enumerate(images):
-            feat = img[feat_type]
-            if lengths[i] > 2:  # if sentence not empty
-                imgs[0:lengths[i], i].copy_(torch.from_numpy(feat.astype(np.int64)))
-                # imgs[lengths[i] - 1, i] = self.eor_index
-
-        return imgs, lengths
 
 
     def remove_empty_sentences(self):
@@ -425,7 +408,7 @@ class ParallelDataset(Dataset):
 
 class ParallelDatasetWithRegions(Dataset):
 
-    def __init__(self, sent1, pos1, sent2, pos2,image_feats,good_indices,params):
+    def __init__(self, sent1, pos1, sent2, pos2, image_names, params):
         self.bor_index = params.bor_index
         self.eor_index = params.eor_index
         self.eos_index = params.eos_index
@@ -433,14 +416,13 @@ class ParallelDatasetWithRegions(Dataset):
         self.batch_size = params.batch_size
         self.tokens_per_batch = params.tokens_per_batch
         self.max_batch_size = params.max_batch_size
-        self.image_feats = np.array(image_feats)
+        # self.image_feats = np.array(image_feats)
         self.sent1 = sent1
         self.sent2 = sent2
         self.pos1 = pos1
         self.pos2 = pos2
-        self.pos1 = pos1[good_indices]
-        self.pos2 = pos2[good_indices]
-
+        self.image_names = np.array(image_names)
+        self.region_features_path = params.region_feats_path
         self.lengths1 = self.pos1[:, 1] - self.pos1[:, 0]
         self.lengths2 = self.pos2[:, 1] - self.pos2[:, 0]
         # # check number of sentences
@@ -485,7 +467,7 @@ class ParallelDatasetWithRegions(Dataset):
         self.pos2 = self.pos2[indices]
         self.lengths1 = self.pos1[:, 1] - self.pos1[:, 0]
         self.lengths2 = self.pos2[:, 1] - self.pos2[:, 0]
-        self.image_feats = self.image_feats[indices]
+        self.image_names = self.image_names[indices]
 
         logger.info("Removed %i empty sentences." % (init_size - len(indices)))
         self.check()
@@ -505,7 +487,7 @@ class ParallelDatasetWithRegions(Dataset):
         self.pos2 = self.pos2[indices]
         self.lengths1 = self.pos1[:, 1] - self.pos1[:, 0]
         self.lengths2 = self.pos2[:, 1] - self.pos2[:, 0]
-        self.image_feats = self.image_feats[indices]
+        self.image_names = self.image_names[indices]
 
         logger.info("Removed %i too long sentences." % (init_size - len(indices)))
         self.check()
@@ -550,12 +532,17 @@ class ParallelDatasetWithRegions(Dataset):
 
             pos1 = self.pos1[sentence_ids]
             pos2 = self.pos2[sentence_ids]
+
+            image_name_with_indices  =zip(sentence_ids, self.image_names[sentence_ids])
+            image_features, good_indices = self.load_images(self.region_features_path, image_name_with_indices)
+            image_scores = self.batch_images(image_features, feat_type="detection_scores")
+            img_all_dict = image_features
+            # img_all_dict = self.image_feats[sentence_ids]
+            # print("length of image dict: ", len(img_all_dict))
+            pos1 = self.pos1[good_indices]
+            pos2 = self.pos2[good_indices]
             sent1 = self.batch_sentences([self.sent1[a:b] for a, b in pos1])
             sent2 = self.batch_sentences([self.sent2[a:b] for a, b in pos2])
-            image_scores = self.batch_images(self.image_feats[sentence_ids], feat_type="detection_scores")
-
-            img_all_dict = self.image_feats[sentence_ids]
-            # print("length of image dict: ", len(img_all_dict))
             yield (sent1, sent2, image_scores, img_all_dict, sentence_ids) if return_indices else (sent1, sent2,
                                                                                                      image_scores,
                                                                                                      img_all_dict)
@@ -602,3 +589,37 @@ class ParallelDatasetWithRegions(Dataset):
 
         # return the iterator
         return self.get_batches_iterator(batches, return_indices)
+
+    def batch_images(self, images, feat_type):
+        """
+        Take as input a list of n sentences (torch.LongTensor vectors) and return
+        a tensor of size (slen, n) where slen is the length of the longest
+        sentence, and a vector lengths containing the length of each sentence.
+        """
+        # sentences = sorted(sentences, key=lambda x: len(x), reverse=True)
+
+        lengths = torch.LongTensor([len(s[feat_type]) for s in images])
+        imgs = torch.LongTensor(lengths.max().item(), lengths.size(0)).fill_(self.pad_index)
+        # imgs[0] = self.bor_index
+        for i, img in enumerate(images):
+            feat = img[feat_type]
+            if lengths[i] > 2:  # if sentence not empty
+                imgs[0:lengths[i], i].copy_(torch.from_numpy(feat.astype(np.int64)))
+                # imgs[lengths[i] - 1, i] = self.eor_index
+
+        return imgs, lengths
+
+    def load_images(self, region_features_path, image_name_with_indices):
+
+        img_data = []
+        good_indices = []
+        for ind, image_name in image_name_with_indices:
+            with open(os.path.join(region_features_path, image_name), "rb") as f:
+                try:
+                    x = pickle.load(f)
+                    img_data.append(x)
+                    good_indices.append(ind)
+                except:
+                    pass
+
+        return img_data, good_indices
