@@ -203,7 +203,7 @@ class Evaluator(object):
             if not np.any(to_predict[:lengths[i] - 1, i]):
                 v = rng.randint(1, lengths[i] - 1)
                 to_predict[v, i] = 1
-        pred_mask = torch.from_numpy(to_predict.astype(np.uint8))
+        pred_mask = torch.from_numpy(to_predict.astype(np.bool))
 
         # generate possible targets / update x input
         _x_real = x[pred_mask]
@@ -233,9 +233,9 @@ class Evaluator(object):
 
                 #TODO fix MLM evaluation
 
-                # prediction task (evaluate perplexity and accuracy)
-                # for lang1, lang2 in params.mlm_steps:
-                    # self.evaluate_mlm(scores, data_set, lang1, lang2)
+                #prediction task (evaluate perplexity and accuracy)
+                for lang1, lang2 in params.mlm_steps:
+                    self.evaluate_mlm(scores, data_set, lang1, lang2)
 
                 # machine translation task (evaluate perplexity and accuracy)
                 for lang1, lang2 in set(params.mt_steps + [(l2, l3) for _, l2, l3 in params.bt_steps]):
@@ -401,6 +401,7 @@ class Evaluator(object):
         if eval_memory:
             for mem_name, mem_att in all_mem_att.items():
                 eval_memory_usage(scores, '%s_%s_%s' % (data_set, l1l2, mem_name), mem_att, params.mem_size)
+
     def evaluate_vlm(self, scores, data_set, lang1, lang2):
         """
         Evaluate perplexity and next word prediction accuracy.

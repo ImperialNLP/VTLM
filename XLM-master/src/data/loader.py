@@ -101,7 +101,7 @@ def set_dico_parameters(params, data, dico):
     # params.bor_index = dico.index("<r>")
     # params.eor_index = dico.index("</r>")
     params.num_of_regions = 36
-    params.num_of_classes = 600
+    params.num_of_classes = 601
 
 
 
@@ -368,6 +368,12 @@ def check_data_params(params):
     params.mlm_steps = [(s[0], None) if len(s) == 1 else tuple(s) for s in mlm_steps]
     # assert all([(l1 in params.langs) and (l2 in params.langs or l2 is None) for l1, l2 in params.mlm_steps])
     assert len(params.mlm_steps) == len(set(params.mlm_steps))
+
+    # MLM / TLM steps
+    vlm_steps = [s for s in params.vlm_steps.split('-') if len(s) > 0]
+    params.vlm_steps = [(s[0], None) if len(s) == 1 else tuple(s) for s in mlm_steps]
+    # assert all([(l1 in params.langs) and (l2 in params.langs or l2 is None) for l1, l2 in params.mlm_steps])
+    assert len(params.vlm_steps) == len(set(params.vlm_steps))
 
     # parallel classification steps
     params.pc_steps = [tuple(s.split('-')) for s in params.pc_steps.split(',') if len(s) > 0]

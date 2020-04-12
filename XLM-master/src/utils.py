@@ -35,7 +35,7 @@ class AttrDict(dict):
 def get_image_properties(img_dict, property_name):
     feat_list = []
     for img in img_dict:
-        feat_list.append(img[property_name])
+        feat_list.append(img[property_name].squeeze())
     return np.array(feat_list)
 
 

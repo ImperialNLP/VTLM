@@ -404,7 +404,7 @@ class TransformerModel(nn.Module):
     def fwd(self, x, lengths, causal,
             src_enc=None, src_len=None,
             positions=None, langs=None, image_langs=None, cache=None,
-            image_regions = None,box_coordinates = None, img_dict = None):
+            image_regions = None, box_coordinates = None, img_dict = None):
         """
         Inputs:
             `x` LongTensor(slen, bs), containing word indices
@@ -432,11 +432,6 @@ class TransformerModel(nn.Module):
         # generate masks
         mask, attn_mask = get_masks(slen, lengths, causal)
         # mask = combined_mask[:,self.num_of_regions:]
-
-        img_mask = torch.ones([mask.shape[0], self.num_of_regions], dtype=torch.uint8).cuda()
-        img_attn_mask = torch.ones([mask.shape[0], self.num_of_regions], dtype=torch.uint8).cuda()
-        combined_mask = torch.cat((mask, img_mask), dim=1)
-        combined_attn_mask = torch.cat((attn_mask, img_attn_mask), dim=1)
 
         if self.is_decoder and src_enc is not None:
             src_mask = torch.arange(src_len.max(), dtype=torch.long, device=lengths.device) < src_len[:, None]
@@ -466,7 +461,12 @@ class TransformerModel(nn.Module):
         if img_dict is not None and image_langs is not None:
             image_langs = image_langs.transpose(0, 1)
 
-            #detection_classes
+            img_mask = torch.ones([mask.shape[0], self.num_of_regions], dtype=torch.bool).cuda()
+            img_attn_mask = torch.ones([mask.shape[0], self.num_of_regions], dtype=torch.bool).cuda()
+            combined_mask = torch.cat((mask, img_mask), dim=1)
+            mask = torch.cat((attn_mask, img_attn_mask), dim=1)
+
+            # detection_classes
             image_regions = self.projector(get_image_properties(img_dict, "detection_features"))
             regional_encodings = self.regional_encodings(get_image_properties(img_dict, "detection_boxes"))
             image_regions += regional_encodings
@@ -482,7 +482,7 @@ class TransformerModel(nn.Module):
         for i in range(self.n_layers):
 
             # self attention
-            attn = self.attentions[i](tensor, combined_attn_mask, cache=cache)
+            attn = self.attentions[i](tensor, mask, cache=cache)
             attn = F.dropout(attn, p=self.dropout, training=self.training)
             tensor = tensor + attn
             tensor = self.layer_norm1[i](tensor)
@@ -506,7 +506,7 @@ class TransformerModel(nn.Module):
                 tensor = tensor + self.memories['%i_after' % i](tensor)
             # TODO: add extra layer norm here?
 
-            tensor *= combined_mask.unsqueeze(-1).to(tensor.dtype)
+            tensor *= mask.unsqueeze(-1).to(tensor.dtype)
 
         # update cache length
         if cache is not None:

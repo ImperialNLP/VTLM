@@ -22,7 +22,9 @@ from .utils import to_cuda, concat_batches, find_modules, concat_batches_triple,
 from .utils import parse_lambda_config, update_lambdas
 from .model.memory import HashingMemory
 from .model.transformer import TransformerFFN
+from torch.utils.tensorboard import SummaryWriter
 
+# default `log_dir` is "runs" - we'll be more specific here
 
 logger = getLogger()
 
@@ -35,6 +37,8 @@ class Trainer(object):
         """
         # epoch / iteration size
         self.epoch_size = params.epoch_size
+        self.writer = SummaryWriter(params.dump_path + "/" + params.exp_name + "_log")
+
         if self.epoch_size == -1:
             self.epoch_size = self.data
             assert self.epoch_size > 0
@@ -484,12 +488,12 @@ class Trainer(object):
         # define target words to predict
         if params.sample_alpha == 0:
             pred_mask = np.random.rand(slen, bs) <= params.word_pred
-            pred_mask = torch.from_numpy(pred_mask.astype(np.uint8))
+            pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
         else:
             x_prob = params.mask_scores[x.flatten()]
             n_tgt = math.ceil(params.word_pred * slen * bs)
             tgt_ids = np.random.choice(len(x_prob), n_tgt, replace=False, p=x_prob / x_prob.sum())
-            pred_mask = torch.zeros(slen * bs, dtype=torch.uint8)
+            pred_mask = torch.zeros(slen * bs, dtype=torch.bool)
             pred_mask[tgt_ids] = 1
             pred_mask = pred_mask.view(slen, bs)
 
@@ -528,12 +532,12 @@ class Trainer(object):
         # define target words to predict
         if params.sample_alpha == 0:
             pred_mask = np.random.rand(slen, bs) <= params.word_pred
-            pred_mask = torch.from_numpy(pred_mask.astype(np.uint8))
+            pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
         else:
             x_prob = params.mask_scores[x.flatten()]
             n_tgt = math.ceil(params.word_pred * slen * bs)
             tgt_ids = np.random.choice(len(x_prob), n_tgt, replace=False, p=x_prob / x_prob.sum())
-            pred_mask = torch.zeros(slen * bs, dtype=torch.uint8)
+            pred_mask = torch.zeros(slen * bs, dtype=torch.bool)
             pred_mask[tgt_ids] = 1
             pred_mask = pred_mask.view(slen, bs)
 
@@ -811,7 +815,7 @@ class Trainer(object):
         self.stats['processed_s'] += lengths.size(0)
         self.stats['processed_w'] += pred_mask.sum().item()
 
-    def mlm_step(self, lang1, lang2, lambda_coeff):
+    def mlm_step(self, lang1, lang2, lambda_coeff, iter):
         """
         Masked word prediction step.
         MLM objective is lang2 is None, TLM objective otherwise.
@@ -837,6 +841,11 @@ class Trainer(object):
         self.stats[('MLM-%s' % lang1) if lang2 is None else ('MLM-%s-%s' % (lang1, lang2))].append(loss.item())
         loss = lambda_coeff * loss
 
+        if iter % 100 == 0:
+
+            self.writer.add_scalar('loss',
+                              loss.data.tolist(),
+                              iter)
         # optimize
         self.optimize(loss)
 
@@ -846,7 +855,7 @@ class Trainer(object):
         self.stats['processed_w'] += pred_mask.sum().item()
 
 
-    def vlm_step(self, lang1, lang2,lambda_coeff): # (32,36,8,8,1586),(32,36,4)
+    def vlm_step(self, lang1, lang2,lambda_coeff, iter): # (32,36,8,8,1586),(32,36,4)
         """
         Masked word prediction step.
         MLM objective is lang2 is None, TLM objective otherwise.
@@ -880,11 +889,25 @@ class Trainer(object):
         sent_pred_mask = pred_mask[:-img_tensor_length:,:]
         img_tensor = tensor[:img_tensor_length:,:]
 
-        _, loss = model('predict', tensor=sent_tensor, pred_mask=sent_pred_mask, y=y, get_scores=False)
+        _, text_loss = model('predict', tensor=sent_tensor, pred_mask=sent_pred_mask, y=y, get_scores=False)
         _, img_loss = model('predict_img_class', tensor=img_tensor, pred_mask=img_pred_mask, y=img_y, get_scores=False)
-        loss = loss + img_loss
+
+        loss = text_loss + img_loss
         self.stats[('VLM-%s' % lang1) if lang2 is None else ('VLM-%s-%s' % (lang1, lang2))].append(loss.item())
         loss = lambda_coeff * loss
+
+        if iter % 100 == 0:
+
+            self.writer.add_scalar('img_loss',
+                              img_loss.data.tolist(),
+                              iter)
+            self.writer.add_scalar('text_loss',
+                              text_loss.data.tolist(),
+                              iter)
+
+            self.writer.add_scalar('total_loss',
+                              loss.data.tolist(),
+                              iter)
 
         # optimize
         self.optimize(loss)

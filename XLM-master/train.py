@@ -16,6 +16,7 @@ from src.model import check_model_params, build_model
 from src.model.memory import HashingMemory
 from src.trainer import SingleTrainer, EncDecTrainer
 from src.evaluation.evaluator import SingleEvaluator, EncDecEvaluator
+from torch.utils.tensorboard import SummaryWriter
 
 
 def get_parser():
@@ -69,6 +70,8 @@ def get_parser():
     parser.add_argument("--use_lang_emb", type=bool_flag, default=True,
                         help="Use language embedding")
 
+    parser.add_argument("--only_vlm", type=bool_flag, default=False,
+                        help="Run only vlm step")
     # memory parameters
     parser.add_argument("--use_memory", type=bool_flag, default=False,
                         help="Use an external memory")
@@ -235,6 +238,7 @@ def main(params):
     # load data
     data = load_data(params)
 
+    writer = SummaryWriter(params.dump_path + "/" + params.exp_name + "_log")
 
     # build model
     if params.encoder_only:
@@ -260,7 +264,7 @@ def main(params):
 
     # set sampling probabilities for training
     set_sampling_probs(data, params)
-
+    iter = 0
     # language model training
     for _ in range(params.max_epoch):
 
@@ -269,37 +273,44 @@ def main(params):
         trainer.n_sentences = 0
 
         while trainer.n_sentences < trainer.epoch_size:
-            # CLM steps
-            # for lang1, lang2 in shuf_order(params.clm_steps, params):
-                # trainer.clm_step(lang1, lang2, params.lambda_clm)
 
-            # MLM steps (also includes TLM if lang2 is not None)
-            for lang1, lang2 in shuf_order(params.mlm_steps, params):
-                # trainer.mlm_step(lang1, lang2, params.lambda_mlm)
-                if lang1 and lang2:
-                    trainer.vlm_step(lang1, lang2, params.lambda_clm)
+            if params.only_vlm:
+                for lang1, lang2 in shuf_order(params.vlm_steps, params):
+                    # trainer.mlm_step(lang1, lang2, params.lambda_mlm)
+                    if lang1 and lang2:
+                        trainer.vlm_step(lang1, lang2, params.lambda_clm, iter)
+            else:
+                # CLM steps
+                # for lang1, lang2 in shuf_order(params.clm_steps, params):
+                    # trainer.clm_step(lang1, lang2, params.lambda_clm)
 
-            # for lang1, lang2 in shuf_order(params.mlm_steps, params):
-            #     trainer.vlm_step(lang1, lang2, params.lambda_mlm)
+                # MLM steps (also includes TLM if lang2 is not None)
+                for lang1, lang2 in shuf_order(params.mlm_steps, params):
+                    trainer.mlm_step(lang1, lang2, params.lambda_mlm, iter)
 
+                for lang1, lang2 in shuf_order(params.vlm_steps, params):
+                    # trainer.mlm_step(lang1, lang2, params.lambda_mlm)
+                    if lang1 and lang2:
+                        trainer.vlm_step(lang1, lang2, params.lambda_clm, iter)
 
-            # parallel classification steps
-            for lang1, lang2 in shuf_order(params.pc_steps, params):
-                trainer.pc_step(lang1, lang2, params.lambda_pc)
+                # parallel classification steps
+                for lang1, lang2 in shuf_order(params.pc_steps, params):
+                    trainer.pc_step(lang1, lang2, params.lambda_pc)
 
-            # denoising auto-encoder steps
-            for lang in shuf_order(params.ae_steps):
-                trainer.mt_step(lang, lang, params.lambda_ae)
+                # denoising auto-encoder steps
+                for lang in shuf_order(params.ae_steps):
+                    trainer.mt_step(lang, lang, params.lambda_ae)
 
-            # machine translation steps
-            for lang1, lang2 in shuf_order(params.mt_steps, params):
-                trainer.mt_step(lang1, lang2, params.lambda_mt)
+                # machine translation steps
+                for lang1, lang2 in shuf_order(params.mt_steps, params):
+                    trainer.mt_step(lang1, lang2, params.lambda_mt)
 
-            # back-translation steps
-            for lang1, lang2, lang3 in shuf_order(params.bt_steps):
-                trainer.bt_step(lang1, lang2, lang3, params.lambda_bt)
+                # back-translation steps
+                for lang1, lang2, lang3 in shuf_order(params.bt_steps):
+                    trainer.bt_step(lang1, lang2, lang3, params.lambda_bt)
 
             trainer.iter()
+            iter += 1
 
         logger.info("============ End of epoch %i ============" % trainer.epoch)
 
@@ -308,6 +319,9 @@ def main(params):
 
         # print / JSON log
         for k, v in scores.items():
+            writer.add_scalar(k,
+                              v,
+                              iter)
             logger.info("%s -> %.6f" % (k, v))
         if params.is_master:
             logger.info("__log__:%s" % json.dumps(scores))
