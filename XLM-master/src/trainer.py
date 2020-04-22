@@ -64,7 +64,7 @@ class Trainer(object):
             logger.info("Using nn.parallel.DistributedDataParallel ...")
             for name in self.MODEL_NAMES:
                 #logger.info("name: ", name)
-                setattr(self, name, nn.parallel.DistributedDataParallel(getattr(self, name), find_unused_parameters=False, device_ids=[params.local_rank], output_device=params.local_rank, broadcast_buffers=True))
+                setattr(self, name, nn.parallel.DistributedDataParallel(getattr(self, name), find_unused_parameters=True, device_ids=[params.local_rank], output_device=params.local_rank, broadcast_buffers=True))
         logger.info("Using nn.parallel.DistributedDataParallel ...")
 
         # set optimizers
