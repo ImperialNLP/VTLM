@@ -1,4 +1,3 @@
-<<<<<<< Updated upstream
 # Copyright (c) 2019-present, Facebook, Inc.
 # All rights reserved.
 #
@@ -848,5 +847,4 @@ class BeamHypotheses(object):
             return True
         else:
             return self.worst_score >= best_sum_logprobs / self.max_len ** self.length_penalty
-=======
->>>>>>> Stashed changes
+
