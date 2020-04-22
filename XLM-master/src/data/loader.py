@@ -78,6 +78,7 @@ def set_dico_parameters(params, data, dico):
     else:
         data['dico'] = dico
 
+    print("DICO: ", data.keys())
     n_words = len(dico)
     bos_index = dico.index(BOS_WORD)
     eos_index = dico.index(EOS_WORD)
@@ -170,13 +171,6 @@ def load_para_data(params, data):
     Load parallel data.
     """
     data['para'] = {}
-    data["dico"].word2id["<r>"] = len(data["dico"].word2id)
-    data["dico"].id2word[len(data["dico"].word2id) - 1] = "<r>"
-    data["dico"].counts["<r>"] = 0
-    data["dico"].word2id["</r>"] = len(data["dico"].word2id)
-    data["dico"].id2word[len(data["dico"].word2id) - 1] = "</r>"
-    data["dico"].counts["</r>"] = 0
-    params.n_words += 2
 
     required_para_train = set(params.clm_steps + params.mlm_steps + params.pc_steps + params.mt_steps)
 
@@ -204,19 +198,6 @@ def load_para_data(params, data):
             tgt_data = load_binarized(tgt_path, params)
 
             # update dictionary parameters
-            src_data["dico"].word2id["<r>"] = len(src_data["dico"].word2id)
-            src_data["dico"].id2word[len(src_data["dico"].word2id)-1] =  "<r>"
-            src_data["dico"].counts["<r>"] = 0
-            src_data["dico"].word2id["</r>"] = len(src_data["dico"].word2id)
-            src_data["dico"].id2word[len(src_data["dico"].word2id)-1] =  "</r>"
-            src_data["dico"].counts["</r>"] = 0
-            tgt_data["dico"].word2id["<r>"] = len(tgt_data["dico"].word2id)
-            tgt_data["dico"].id2word[len(tgt_data["dico"].word2id)-1] = "<r>"
-            tgt_data["dico"].counts["<r>"] = 0
-            tgt_data["dico"].word2id["</r>"] = len(tgt_data["dico"].word2id)
-            tgt_data["dico"].id2word[len(tgt_data["dico"].word2id)-1] =  "</r>"
-            tgt_data["dico"].counts["</r>"] = 0
-            #
             # params.bor_index = src_data["dico"].index("<r>")
             # params.eor_index = src_data["dico"].index("</r>")
             set_dico_parameters(params, data, src_data['dico'])
@@ -280,26 +261,11 @@ def load_vpara_data(params, data):
             src_data = load_binarized(src_path, params)
             tgt_data = load_binarized(tgt_path, params)
             image_names = []
-            src_data["dico"].word2id["<r>"] = len(src_data["dico"].word2id)
-            src_data["dico"].id2word[len(src_data["dico"].word2id)-1] =  "<r>"
-            src_data["dico"].counts["<r>"] = 0
-            src_data["dico"].word2id["</r>"] = len(src_data["dico"].word2id)
-            src_data["dico"].id2word[len(src_data["dico"].word2id)-1] =  "</r>"
-            src_data["dico"].counts["</r>"] = 0
-            tgt_data["dico"].word2id["<r>"] = len(tgt_data["dico"].word2id)
-            tgt_data["dico"].id2word[len(tgt_data["dico"].word2id)-1] = "<r>"
-            tgt_data["dico"].counts["<r>"] = 0
-            tgt_data["dico"].word2id["</r>"] = len(tgt_data["dico"].word2id)
-            tgt_data["dico"].id2word[len(tgt_data["dico"].word2id)-1] =  "</r>"
-            tgt_data["dico"].counts["</r>"] = 0
-            params.bor_index = src_data["dico"].index("<r>")
-            params.eor_index = src_data["dico"].index("</r>")
             existing_indices = []
             with open(os.path.join(params.image_names,"image_names."+splt),"r") as img_names:
                 for i,line in enumerate(img_names):
                     line = line.strip()
-                    line = line[:line.index(".")+1]
-                    line = line + "pkl"
+                    line = line + ".pkl"
                     image_names.append(line)
                     existing_indices.append(i)
 

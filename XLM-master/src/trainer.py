@@ -54,7 +54,6 @@ class Trainer(object):
             find_modules(getattr(self, name), f'self.{name}', TransformerFFN, self.ffn_list)
         logger.info("Found %i memories." % len(self.memory_list))
         logger.info("Found %i FFN." % len(self.ffn_list))
-
         # set parameters
         self.set_parameters()
 
@@ -64,7 +63,9 @@ class Trainer(object):
         if params.multi_gpu and params.amp == -1:
             logger.info("Using nn.parallel.DistributedDataParallel ...")
             for name in self.MODEL_NAMES:
-                setattr(self, name, nn.parallel.DistributedDataParallel(getattr(self, name), device_ids=[params.local_rank], output_device=params.local_rank, broadcast_buffers=True))
+                #logger.info("name: ", name)
+                setattr(self, name, nn.parallel.DistributedDataParallel(getattr(self, name), find_unused_parameters=False, device_ids=[params.local_rank], output_device=params.local_rank, broadcast_buffers=True))
+        logger.info("Using nn.parallel.DistributedDataParallel ...")
 
         # set optimizers
         self.set_optimizers()
@@ -479,7 +480,7 @@ class Trainer(object):
 
         params = self.params
 
-        x = torch.from_numpy(get_image_properties(img_dict, "detection_classes")).long()
+        x = torch.from_numpy(get_image_properties(img_dict, "detection_classes").astype(dtype = 'float32'))
         # bor_tensor = torch.from_numpy(np.array([self.params.bor_index])).long().unsqueeze(0).repeat(x.shape[0],1)
         # eor_tensor = torch.from_numpy(np.array([self.params.eor_index])).long().unsqueeze(0).repeat(x.shape[0],1)
         x = x.t()

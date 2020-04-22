@@ -1,8 +1,8 @@
 #!/bin/bash
 
 #SBATCH --nodes=1
-#SBATCH --ntasks=4
-#SBATCH --gres=gpu:4
+#SBATCH --ntasks=6
+#SBATCH --gres=gpu:3
 #SBATCH --output=./%j.stdout
 #SBATCH --error=./%j.stderr
 #SBATCH --job-name="deneme1"

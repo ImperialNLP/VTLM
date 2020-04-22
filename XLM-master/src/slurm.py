@@ -54,8 +54,8 @@ def init_distributed_mode(params):
         - world_size
     """
     params.is_slurm_job = 'SLURM_JOB_ID' in os.environ and not params.debug_slurm
-    print("SLURM job: %s" % str(params.is_slurm_job))
-
+    # print("SLURM job: %s" % str(params.is_slurm_job))
+    params.is_slurm_job = False
     # SLURM job
     if params.is_slurm_job:
 
@@ -153,6 +153,7 @@ def init_distributed_mode(params):
 
     # set GPU device
     torch.cuda.set_device(params.local_rank)
+    
 
     # initialize multi-GPU
     if params.multi_gpu:

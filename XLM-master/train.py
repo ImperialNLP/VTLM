@@ -237,7 +237,11 @@ def main(params):
 
     # load data
     data = load_data(params)
+<<<<<<< Updated upstream
 
+=======
+    print("DATA ", data.keys())
+>>>>>>> Stashed changes
     writer = SummaryWriter(params.dump_path + "/" + params.exp_name + "_log")
 
     # build model
@@ -273,6 +277,7 @@ def main(params):
         trainer.n_sentences = 0
 
         while trainer.n_sentences < trainer.epoch_size:
+<<<<<<< Updated upstream
 
             if params.only_vlm:
                 for lang1, lang2 in shuf_order(params.vlm_steps, params):
@@ -305,6 +310,35 @@ def main(params):
                 for lang1, lang2 in shuf_order(params.mt_steps, params):
                     trainer.mt_step(lang1, lang2, params.lambda_mt)
 
+=======
+
+            if params.only_vlm:
+                for lang1, lang2 in shuf_order(params.vlm_steps, params):
+                    # trainer.mlm_step(lang1, lang2, params.lambda_mlm)
+                    if lang1 and lang2:
+                        trainer.vlm_step(lang1, lang2, params.lambda_clm, iter)
+            else:
+                # CLM steps
+                # for lang1, lang2 in shuf_order(params.clm_steps, params):
+                    # trainer.clm_step(lang1, lang2, params.lambda_clm)
+
+                # MLM steps (also includes TLM if lang2 is not None)
+                for lang1, lang2 in shuf_order(params.mlm_steps, params):
+                    trainer.mlm_step(lang1, lang2, params.lambda_mlm, iter)
+
+                # parallel classification steps
+                for lang1, lang2 in shuf_order(params.pc_steps, params):
+                    trainer.pc_step(lang1, lang2, params.lambda_pc)
+
+                # denoising auto-encoder steps
+                for lang in shuf_order(params.ae_steps):
+                    trainer.mt_step(lang, lang, params.lambda_ae)
+
+                # machine translation steps
+                for lang1, lang2 in shuf_order(params.mt_steps, params):
+                    trainer.mt_step(lang1, lang2, params.lambda_mt)
+
+>>>>>>> Stashed changes
                 # back-translation steps
                 for lang1, lang2, lang3 in shuf_order(params.bt_steps):
                     trainer.bt_step(lang1, lang2, lang3, params.lambda_bt)

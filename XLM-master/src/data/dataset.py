@@ -1,4 +1,4 @@
-# Copyright (c) 2019-present, Facebook, Inc.
+# Copyright (c) 2019::-present, Facebook, Inc.
 # All rights reserved.
 #
 # This source code is licensed under the license found in the
@@ -11,6 +11,7 @@ import numpy as np
 import torch
 import os
 import pickle
+import bz2
 
 logger = getLogger()
 
@@ -409,8 +410,6 @@ class ParallelDataset(Dataset):
 class ParallelDatasetWithRegions(Dataset):
 
     def __init__(self, sent1, pos1, sent2, pos2, image_names, params):
-        self.bor_index = params.bor_index
-        self.eor_index = params.eor_index
         self.eos_index = params.eos_index
         self.pad_index = params.pad_index
         self.batch_size = params.batch_size
@@ -597,16 +596,19 @@ class ParallelDatasetWithRegions(Dataset):
         sentence, and a vector lengths containing the length of each sentence.
         """
         # sentences = sorted(sentences, key=lambda x: len(x), reverse=True)
-
         lengths = torch.LongTensor([len(s[feat_type]) for s in images])
+
         imgs = torch.LongTensor(lengths.max().item(), lengths.size(0)).fill_(self.pad_index)
         # imgs[0] = self.bor_index
         for i, img in enumerate(images):
             feat = img[feat_type]
-            if lengths[i] > 2:  # if sentence not empty
+            try: 
                 imgs[0:lengths[i], i].copy_(torch.from_numpy(feat.astype(np.int64)))
                 # imgs[lengths[i] - 1, i] = self.eor_index
-
+            except Exception as e:
+                print(feat.shape)
+                print(lengths[i], len(lengths[i]))
+                print(e)
         return imgs, lengths
 
     def load_images(self, region_features_path, image_name_with_indices):
@@ -614,12 +616,20 @@ class ParallelDatasetWithRegions(Dataset):
         img_data = []
         good_indices = []
         for ind, image_name in image_name_with_indices:
-            with open(os.path.join(region_features_path, image_name), "rb") as f:
-                try:
+            try:
+                f_name = os.path.join(region_features_path, image_name)
+                with open(f_name, "rb") as f:
+                
                     x = pickle.load(f)
-                    img_data.append(x)
-                    good_indices.append(ind)
-                except:
+                    if len(x) != 0:
+                        img_data.append(x)
+                        good_indices.append(ind)
+                    else:
+                        with open("empty_files.txt", "a") as f:
+                            f.write(file_path + "\n")
+                            print('File is empty')
+
+            except:
                     pass
 
         return img_data, good_indices

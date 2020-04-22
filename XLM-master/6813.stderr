@@ -1,0 +1,223 @@
+/var/spool/slurm/d/job06813/slurm_script: line 15: {workdir}/6813.stdout: No such file or directory
+/var/spool/slurm/d/job06813/slurm_script: line 16: {workdir}/6813.stdout: No such file or directory
+/var/spool/slurm/d/job06813/slurm_script: line 17: {workdir}/6813.stdout: No such file or directory
+/var/spool/slurm/d/job06813/slurm_script: line 18: {workdir}/6813.stdout: No such file or directory
+/var/spool/slurm/d/job06813/slurm_script: line 19: {workdir}/6813.stdout: No such file or directory
+/var/spool/slurm/d/job06813/slurm_script: line 20: {workdir}/6813.stdout: No such file or directory
+0: FAISS library was not found.
+0: FAISS not available. Switching to standard nearest neighbors search implementation.
+0: FAISS library was not found.
+0: FAISS not available. Switching to standard nearest neighbors search implementation.
+1: FAISS library was not found.
+1: FAISS not available. Switching to standard nearest neighbors search implementation.
+1: FAISS library was not found.
+1: FAISS not available. Switching to standard nearest neighbors search implementation.
+2: FAISS library was not found.
+2: FAISS not available. Switching to standard nearest neighbors search implementation.
+2: FAISS library was not found.
+2: FAISS not available. Switching to standard nearest neighbors search implementation.
+3: FAISS library was not found.
+3: FAISS not available. Switching to standard nearest neighbors search implementation.
+3: FAISS library was not found.
+3: FAISS not available. Switching to standard nearest neighbors search implementation.
+1: Traceback (most recent call last):
+1: Traceback (most recent call last):
+1:   File "train.py", line 348, in <module>
+1:   File "train.py", line 348, in <module>
+2: Traceback (most recent call last):
+2: Traceback (most recent call last):
+2:   File "train.py", line 348, in <module>
+2:   File "train.py", line 348, in <module>
+3: Traceback (most recent call last):
+3: Traceback (most recent call last):
+3:   File "train.py", line 348, in <module>
+3:   File "train.py", line 348, in <module>
+0: Traceback (most recent call last):
+0: Traceback (most recent call last):
+0:   File "train.py", line 348, in <module>
+0:   File "train.py", line 348, in <module>
+1:     main(params)
+1:   File "train.py", line 230, in main
+2:     main(params)
+2:   File "train.py", line 230, in main
+3:     main(params)
+3:   File "train.py", line 230, in main
+0:     main(params)
+0:     main(params)
+0:   File "train.py", line 230, in main
+0:   File "train.py", line 230, in main
+1:     main(params)
+1:   File "train.py", line 230, in main
+2:     main(params)
+2:   File "train.py", line 230, in main
+3:     main(params)
+3:   File "train.py", line 230, in main
+3:     init_distributed_mode(params)
+3:   File "/home/menekse/xlm/Animal/XLM-master/src/slurm.py", line 155, in init_distributed_mode
+0:     init_distributed_mode(params)
+0:   File "/home/menekse/xlm/Animal/XLM-master/src/slurm.py", line 155, in init_distributed_mode
+0:     init_distributed_mode(params)
+0:   File "/home/menekse/xlm/Animal/XLM-master/src/slurm.py", line 155, in init_distributed_mode
+1:     init_distributed_mode(params)
+1:   File "/home/menekse/xlm/Animal/XLM-master/src/slurm.py", line 155, in init_distributed_mode
+1:     init_distributed_mode(params)
+1:   File "/home/menekse/xlm/Animal/XLM-master/src/slurm.py", line 155, in init_distributed_mode
+2:     init_distributed_mode(params)
+2:   File "/home/menekse/xlm/Animal/XLM-master/src/slurm.py", line 155, in init_distributed_mode
+3:     init_distributed_mode(params)
+3:   File "/home/menekse/xlm/Animal/XLM-master/src/slurm.py", line 155, in init_distributed_mode
+3:     torch.cuda.set_device(params.local_rank)
+3:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 292, in set_device
+2:     init_distributed_mode(params)
+2:     torch.cuda.set_device(params.local_rank)
+1:     torch.cuda.set_device(params.local_rank)
+1:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 292, in set_device
+2:   File "/home/menekse/xlm/Animal/XLM-master/src/slurm.py", line 155, in init_distributed_mode
+2:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 292, in set_device
+0:     torch.cuda.set_device(params.local_rank)
+0:     torch.cuda.set_device(params.local_rank)
+0:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 292, in set_device
+0:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 292, in set_device
+3:     torch.cuda.set_device(params.local_rank)
+3:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 292, in set_device
+1:     torch.cuda.set_device(params.local_rank)
+1:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 292, in set_device
+3:     torch._C._cuda_setDevice(device)
+3:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 196, in _lazy_init
+0:     torch._C._cuda_setDevice(device)
+1:     torch._C._cuda_setDevice(device)
+1:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 196, in _lazy_init
+0:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 196, in _lazy_init
+0:     torch._C._cuda_setDevice(device)
+0:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 196, in _lazy_init
+2:     torch._C._cuda_setDevice(device)
+2:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 196, in _lazy_init
+2:     torch.cuda.set_device(params.local_rank)
+2:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 292, in set_device
+3:     torch._C._cuda_setDevice(device)
+3:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 196, in _lazy_init
+3:     _check_driver()
+3:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 110, in _check_driver
+1:     torch._C._cuda_setDevice(device)
+1:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 196, in _lazy_init
+1:     _check_driver()
+1:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 110, in _check_driver
+0:     _check_driver()
+0:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 110, in _check_driver
+2:     _check_driver()
+2:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 110, in _check_driver
+0:     _check_driver()
+0:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 110, in _check_driver
+3:     _check_driver()
+2:     torch._C._cuda_setDevice(device)
+2:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 196, in _lazy_init
+3:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 110, in _check_driver
+3:     of the CUDA driver.""".format(str(torch._C._cuda_getDriverVersion())))
+1:     of the CUDA driver.""".format(str(torch._C._cuda_getDriverVersion())))
+1: AssertionError: 
+1: The NVIDIA driver on your system is too old (found version 9010).
+1: Please update your GPU driver by downloading and installing a new
+1: version from the URL: http://www.nvidia.com/Download/index.aspx
+1: Alternatively, go to: https://pytorch.org to install
+1: a PyTorch version that has been compiled with your version
+3: AssertionError: 
+3: The NVIDIA driver on your system is too old (found version 9010).
+3: Please update your GPU driver by downloading and installing a new
+3: version from the URL: http://www.nvidia.com/Download/index.aspx
+3: Alternatively, go to: https://pytorch.org to install
+3: a PyTorch version that has been compiled with your version
+3: of the CUDA driver.
+0:     of the CUDA driver.""".format(str(torch._C._cuda_getDriverVersion())))
+0: AssertionError: 
+0: The NVIDIA driver on your system is too old (found version 9010).
+0: Please update your GPU driver by downloading and installing a new
+0: version from the URL: http://www.nvidia.com/Download/index.aspx
+0: Alternatively, go to: https://pytorch.org to install
+0: a PyTorch version that has been compiled with your version
+0: of the CUDA driver.
+1: of the CUDA driver.
+1:     _check_driver()
+1:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 110, in _check_driver
+2:     of the CUDA driver.""".format(str(torch._C._cuda_getDriverVersion())))
+2: AssertionError: 
+2: The NVIDIA driver on your system is too old (found version 9010).
+2: Please update your GPU driver by downloading and installing a new
+2: version from the URL: http://www.nvidia.com/Download/index.aspx
+2: Alternatively, go to: https://pytorch.org to install
+2: a PyTorch version that has been compiled with your version
+2: of the CUDA driver.
+0:     of the CUDA driver.""".format(str(torch._C._cuda_getDriverVersion())))
+0: AssertionError: 
+0: The NVIDIA driver on your system is too old (found version 9010).
+0: Please update your GPU driver by downloading and installing a new
+0: version from the URL: http://www.nvidia.com/Download/index.aspx
+0: Alternatively, go to: https://pytorch.org to install
+0: a PyTorch version that has been compiled with your version
+0: of the CUDA driver.
+1:     of the CUDA driver.""".format(str(torch._C._cuda_getDriverVersion())))
+1: AssertionError: 
+1: The NVIDIA driver on your system is too old (found version 9010).
+1: Please update your GPU driver by downloading and installing a new
+1: version from the URL: http://www.nvidia.com/Download/index.aspx
+1: Alternatively, go to: https://pytorch.org to install
+1: a PyTorch version that has been compiled with your version
+2:     _check_driver()
+2:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/cuda/__init__.py", line 110, in _check_driver
+1: of the CUDA driver.
+3:     of the CUDA driver.""".format(str(torch._C._cuda_getDriverVersion())))
+3: AssertionError: 
+3: The NVIDIA driver on your system is too old (found version 9010).
+3: Please update your GPU driver by downloading and installing a new
+3: version from the URL: http://www.nvidia.com/Download/index.aspx
+3: Alternatively, go to: https://pytorch.org to install
+3: a PyTorch version that has been compiled with your version
+3: of the CUDA driver.
+2:     of the CUDA driver.""".format(str(torch._C._cuda_getDriverVersion())))
+2: AssertionError: 
+2: The NVIDIA driver on your system is too old (found version 9010).
+2: Please update your GPU driver by downloading and installing a new
+2: version from the URL: http://www.nvidia.com/Download/index.aspx
+2: Alternatively, go to: https://pytorch.org to install
+2: a PyTorch version that has been compiled with your version
+2: of the CUDA driver.
+0: Traceback (most recent call last):
+0:   File "/usr/lib64/python3.6/runpy.py", line 193, in _run_module_as_main
+0:     "__main__", mod_spec)
+0:   File "/usr/lib64/python3.6/runpy.py", line 85, in _run_code
+0:     exec(code, run_globals)
+0:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/distributed/launch.py", line 263, in <module>
+0:     main()
+0:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/distributed/launch.py", line 259, in main
+0:     cmd=cmd)
+0: subprocess.CalledProcessError: Command '['/home/menekse/virtualenvs/torch_env/bin/python', '-u', 'train.py', '--local_rank=1', '--exp_name', 'xlm_en_de_tlm', '--dump_path', '/data/menekse/dumped', '--data_path', '/data/shared/ConceptualCaptions/XLM_data/50k', '--lgs', 'en-de', '--clm_steps', '', '--mlm_steps', 'en-de', '--emb_dim', '512', '--n_layers', '6', '--n_heads', '8', '--dropout', '0.1', '--attention_dropout', '0.1', '--gelu_activation', 'true', '--batch_size', '32', '--bptt', '256', '--optimizer', 'adam,lr=0.0001', '--epoch_size', '300000', '--max_epoch', '100000', '--validation_metrics', 'valid_en_de_mlm_ppl', '--stopping_criterion', '_valid_mlm_ppl,25', '--fp16', 'false', '--image_names', '/data/shared/ConceptualCaptions/XLM_data/50k']' returned non-zero exit status 1.
+1: Traceback (most recent call last):
+1:   File "/usr/lib64/python3.6/runpy.py", line 193, in _run_module_as_main
+1:     "__main__", mod_spec)
+1:   File "/usr/lib64/python3.6/runpy.py", line 85, in _run_code
+1:     exec(code, run_globals)
+1:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/distributed/launch.py", line 263, in <module>
+1:     main()
+1:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/distributed/launch.py", line 259, in main
+1:     cmd=cmd)
+1: subprocess.CalledProcessError: Command '['/home/menekse/virtualenvs/torch_env/bin/python', '-u', 'train.py', '--local_rank=1', '--exp_name', 'xlm_en_de_tlm', '--dump_path', '/data/menekse/dumped', '--data_path', '/data/shared/ConceptualCaptions/XLM_data/50k', '--lgs', 'en-de', '--clm_steps', '', '--mlm_steps', 'en-de', '--emb_dim', '512', '--n_layers', '6', '--n_heads', '8', '--dropout', '0.1', '--attention_dropout', '0.1', '--gelu_activation', 'true', '--batch_size', '32', '--bptt', '256', '--optimizer', 'adam,lr=0.0001', '--epoch_size', '300000', '--max_epoch', '100000', '--validation_metrics', 'valid_en_de_mlm_ppl', '--stopping_criterion', '_valid_mlm_ppl,25', '--fp16', 'false', '--image_names', '/data/shared/ConceptualCaptions/XLM_data/50k']' returned non-zero exit status 1.
+2: Traceback (most recent call last):
+2:   File "/usr/lib64/python3.6/runpy.py", line 193, in _run_module_as_main
+2:     "__main__", mod_spec)
+2:   File "/usr/lib64/python3.6/runpy.py", line 85, in _run_code
+2:     exec(code, run_globals)
+2:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/distributed/launch.py", line 263, in <module>
+2:     main()
+2:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/distributed/launch.py", line 259, in main
+2:     cmd=cmd)
+2: subprocess.CalledProcessError: Command '['/home/menekse/virtualenvs/torch_env/bin/python', '-u', 'train.py', '--local_rank=1', '--exp_name', 'xlm_en_de_tlm', '--dump_path', '/data/menekse/dumped', '--data_path', '/data/shared/ConceptualCaptions/XLM_data/50k', '--lgs', 'en-de', '--clm_steps', '', '--mlm_steps', 'en-de', '--emb_dim', '512', '--n_layers', '6', '--n_heads', '8', '--dropout', '0.1', '--attention_dropout', '0.1', '--gelu_activation', 'true', '--batch_size', '32', '--bptt', '256', '--optimizer', 'adam,lr=0.0001', '--epoch_size', '300000', '--max_epoch', '100000', '--validation_metrics', 'valid_en_de_mlm_ppl', '--stopping_criterion', '_valid_mlm_ppl,25', '--fp16', 'false', '--image_names', '/data/shared/ConceptualCaptions/XLM_data/50k']' returned non-zero exit status 1.
+3: Traceback (most recent call last):
+3:   File "/usr/lib64/python3.6/runpy.py", line 193, in _run_module_as_main
+3:     "__main__", mod_spec)
+3:   File "/usr/lib64/python3.6/runpy.py", line 85, in _run_code
+3:     exec(code, run_globals)
+3:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/distributed/launch.py", line 263, in <module>
+3:     main()
+3:   File "/home/menekse/virtualenvs/torch_env/lib/python3.6/site-packages/torch/distributed/launch.py", line 259, in main
+3:     cmd=cmd)
+3: subprocess.CalledProcessError: Command '['/home/menekse/virtualenvs/torch_env/bin/python', '-u', 'train.py', '--local_rank=1', '--exp_name', 'xlm_en_de_tlm', '--dump_path', '/data/menekse/dumped', '--data_path', '/data/shared/ConceptualCaptions/XLM_data/50k', '--lgs', 'en-de', '--clm_steps', '', '--mlm_steps', 'en-de', '--emb_dim', '512', '--n_layers', '6', '--n_heads', '8', '--dropout', '0.1', '--attention_dropout', '0.1', '--gelu_activation', 'true', '--batch_size', '32', '--bptt', '256', '--optimizer', 'adam,lr=0.0001', '--epoch_size', '300000', '--max_epoch', '100000', '--validation_metrics', 'valid_en_de_mlm_ppl', '--stopping_criterion', '_valid_mlm_ppl,25', '--fp16', 'false', '--image_names', '/data/shared/ConceptualCaptions/XLM_data/50k']' returned non-zero exit status 1.
+srun: error: han: tasks 0-3: Exited with exit code 1
