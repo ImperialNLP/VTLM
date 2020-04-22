@@ -281,7 +281,7 @@ class TransformerFFN(nn.Module):
 class Projector(nn.Module):
     def __init__(self, params):
         super().__init__()
-        self.linear = nn.Linear(8*8*1536,params.emb_dim)
+        self.linear = nn.Linear(1536,params.emb_dim)
     def forward(self, input):
         # expects (batch_size,36,8,8,1586)
         x = input.reshape(input.shape[0], input.shape[1],-1)
