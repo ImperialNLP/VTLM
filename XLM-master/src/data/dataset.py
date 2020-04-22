@@ -624,9 +624,8 @@ class ParallelDatasetWithRegions(Dataset):
                         good_indices.append(ind)
                     else:
                         with open("empty_files.txt", "a") as f:
-                            f.write(file_path + "\n")
+                            f.write(f_name + "\n")
                             print('File is empty')
-
             except:
                     pass
 
