@@ -1,4 +1,4 @@
-# Copyright (c) 2019::-present, Facebook, Inc.
+# Copyright (c) 2019-present, Facebook, Inc.
 # All rights reserved.
 #
 # This source code is licensed under the license found in the
@@ -131,7 +131,6 @@ class Dataset(object):
             sent[lengths[i] - 1, i] = self.eos_index
 
         return sent, lengths
-
 
 
     def remove_empty_sentences(self):
@@ -602,7 +601,7 @@ class ParallelDatasetWithRegions(Dataset):
         # imgs[0] = self.bor_index
         for i, img in enumerate(images):
             feat = img[feat_type]
-            try: 
+            try:
                 imgs[0:lengths[i], i].copy_(torch.from_numpy(feat.astype(np.int64)))
                 # imgs[lengths[i] - 1, i] = self.eor_index
             except Exception as e:
@@ -619,7 +618,6 @@ class ParallelDatasetWithRegions(Dataset):
             try:
                 f_name = os.path.join(region_features_path, image_name)
                 with open(f_name, "rb") as f:
-                
                     x = pickle.load(f)
                     if len(x) != 0:
                         img_data.append(x)
