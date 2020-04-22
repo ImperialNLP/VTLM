@@ -433,7 +433,8 @@ def load_data(params):
 
     # parallel datasets
     load_para_data(params, data)
-    load_vpara_data(params,data)
+    if params.only_vlm:
+        load_vpara_data(params,data)
 
     # monolingual data summary
     logger.info('============ Data summary')
