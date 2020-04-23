@@ -17,10 +17,9 @@ if __name__ == '__main__':
     for pbz2 in sys.argv[1:]:
         fname = pbz2.split('/')[-1].split('.')[0]
         try:
-            with open(pbz2, 'rb') as f:
-                dets = set(pkl.load(f)['detection_classes'].flatten())
+            with bz2.BZ2File(pbz2, 'rb') as f:
+                dets = set(pkl.load(f)['detection_classes'])
                 lbls = [labelmap[lbl] for lbl in dets]
                 print(f'{fname:<10} {",".join(lbls)}')
         except Exception as exc:
             print(f'{fname} buggy!')
-            raise(exc)

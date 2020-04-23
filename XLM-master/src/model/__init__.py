@@ -79,8 +79,7 @@ def check_model_params(params):
     # reload a pretrained model
     if params.reload_model != '':
         if params.encoder_only:
-            #assert os.path.isfile(params.reload_model)
-            pass
+            assert os.path.isfile(params.reload_model)
         else:
             s = params.reload_model.split(',')
             assert len(s) == 2
@@ -119,23 +118,20 @@ def build_model(params, dico):
 
         # reload a pretrained model
         if params.reload_model != '':
-            if not os.path.exists(params.reload_model):
-                logger.info(f"WARNING: Reload model checkpoint file {params.reload_model} does not exist!")
-            else:
-                logger.info("Reloading model from %s ..." % params.reload_model)
-                reloaded = torch.load(params.reload_model, map_location=lambda storage, loc: storage.cuda(params.local_rank))['model']
-                if all([k.startswith('module.') for k in reloaded.keys()]):
-                    reloaded = {k[len('module.'):]: v for k, v in reloaded.items()}
+            logger.info("Reloading model from %s ..." % params.reload_model)
+            reloaded = torch.load(params.reload_model, map_location=lambda storage, loc: storage.cuda(params.local_rank))['model']
+            if all([k.startswith('module.') for k in reloaded.keys()]):
+                reloaded = {k[len('module.'):]: v for k, v in reloaded.items()}
 
-                # # HACK to reload models with less layers
-                # for i in range(12, 24):
-                #     for k in TRANSFORMER_LAYER_PARAMS:
-                #         k = k % i
-                #         if k in model.state_dict() and k not in reloaded:
-                #             logger.warning("Parameter %s not found. Ignoring ..." % k)
-                #             reloaded[k] = model.state_dict()[k]
+            # # HACK to reload models with less layers
+            # for i in range(12, 24):
+            #     for k in TRANSFORMER_LAYER_PARAMS:
+            #         k = k % i
+            #         if k in model.state_dict() and k not in reloaded:
+            #             logger.warning("Parameter %s not found. Ignoring ..." % k)
+            #             reloaded[k] = model.state_dict()[k]
 
-                model.load_state_dict(reloaded)
+            model.load_state_dict(reloaded)
 
         logger.info("Model: {}".format(model))
         logger.info("Number of parameters (model): %i" % sum([p.numel() for p in model.parameters() if p.requires_grad]))

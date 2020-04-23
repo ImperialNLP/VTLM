@@ -269,7 +269,7 @@ class TransformerFFN(nn.Module):
         self.dropout = dropout
         self.lin1 = Linear(in_dim, dim_hidden)
         self.lin2 = Linear(dim_hidden, out_dim)
-        self.act = F.gelu if gelu_activation else F.relu
+        self.act = gelu if gelu_activation else F.relu
 
     def forward(self, input):
         x = self.lin1(input)
