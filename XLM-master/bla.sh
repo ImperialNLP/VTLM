@@ -10,7 +10,7 @@ export DATA_PATH=${DATA_PATH:-/data/shared/ConceptualCaptions/XLM_data/50k}
 export DUMP_PATH=${DUMP_PATH:-/data/menekse/dumped}
 
 if [ $NGPU == "1" ]; then
-    python train.py --exp_name xlm_en_de_tlm \
+    ipython -i train.py -- --exp_name xlm_en_de_tlm \
     --dump_path $DUMP_PATH --data_path $DATA_PATH \
     --lgs 'en-de' --clm_steps '' --mlm_steps 'en-de' --emb_dim 512 --n_layers 6 --n_heads 8 \
     --dropout 0.1 --attention_dropout 0.1 --gelu_activation true --batch_size 32 --bptt 256 \
