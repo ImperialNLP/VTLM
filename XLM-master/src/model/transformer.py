@@ -72,7 +72,7 @@ def create_sinusoidal_embeddings(n_pos, dim, out):
 
 def gelu(x):
     """
-    GELU activation
+    GELU activation (used if Pytorch does not provide one)
     https://arxiv.org/abs/1606.08415
     https://github.com/huggingface/pytorch-openai-transformer-lm/blob/master/model_pytorch.py#L14
     https://github.com/huggingface/pytorch-pretrained-BERT/blob/master/modeling.py
@@ -269,7 +269,8 @@ class TransformerFFN(nn.Module):
         self.dropout = dropout
         self.lin1 = Linear(in_dim, dim_hidden)
         self.lin2 = Linear(dim_hidden, out_dim)
-        self.act = gelu if gelu_activation else F.relu
+        # if torch has gelu, use that one instead of the custom one
+        self.act = getattr(F, 'gelu', gelu) if gelu_activation else F.relu
 
     def forward(self, input):
         x = self.lin1(input)
