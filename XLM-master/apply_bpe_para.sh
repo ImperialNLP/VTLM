@@ -7,11 +7,13 @@ mkdir -p $OUTPATH
 for lg in $(echo $pair | sed -e 's/\-/ /g'); do
   for split in train valid test; do
     $FASTBPE applybpe $OUTPATH/$split.de-en.$lg data/conceptual_captions/$pair.$lg.$split   $OUTPATH/codes
-    
   done
 done
-cat $OUTPATH/train.en | $FASTBPE getvocab - > $OUTPATH/vocab &
-cat $OUTPATH/train.de | $FASTBPE getvocab - > $OUTPATH/vocab &
+cat $OUTPATH/train.{en,de} | $FASTBPE getvocab - > $OUTPATH/vocab
+
+# remove old binarized files
+rm -rf ${OUTPATH}/*.pth
+
 for lg in $(echo $pair | sed -e 's/\-/ /g'); do
   for split in train valid test; do
     python3 preprocess.py $OUTPATH/vocab $OUTPATH/$split.de-en.$lg &
