@@ -21,4 +21,4 @@ ipython -i $TRAIN -- --beam_size 1 --exp_name ${EXP_NAME} --dump_path ${DUMP_PAT
   --dropout '0.1' --attention_dropout '0.1' --gelu_activation true \
   --batch_size 64 --bptt 256 --optimizer 'adam,lr=0.00001' \
   --epoch_size 29000 --eval_bleu true \
-  --stopping_criterion 'valid_en-de_mt_bleu,20' --validation_metrics 'valid_en-de_mt_bleu'
+  --stopping_criterion 'valid_en-de_mt_bleu,20' --validation_metrics 'valid_en-de_mt_bleu' $@
