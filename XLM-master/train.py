@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 #
 
+import sys
 import json
 import random
 import argparse
@@ -259,7 +260,7 @@ def main(params):
         for k, v in scores.items():
             logger.info("%s -> %.6f" % (k, v))
         logger.info("__log__:%s" % json.dumps(scores))
-        exit()
+        sys.exit()
 
     # set sampling probabilities for training
     set_sampling_probs(data, params)

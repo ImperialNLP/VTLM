@@ -6,6 +6,7 @@
 #
 
 import os
+import sys
 import math
 import time
 from logging import getLogger
@@ -732,7 +733,7 @@ class Trainer(object):
                             "than %i epochs. Ending the experiment..." % self.decrease_counts_max)
                 if self.params.multi_gpu and 'SLURM_JOB_ID' in os.environ:
                     os.system('scancel ' + os.environ['SLURM_JOB_ID'])
-                exit()
+                sys.exit()
         self.save_checkpoint('checkpoint', include_optimizers=True)
         self.epoch += 1
 
