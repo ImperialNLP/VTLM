@@ -177,8 +177,8 @@ def build_model(params, dico):
                             dec_reload[name % i] = decoder.state_dict()[name % i]
                 decoder.load_state_dict(dec_reload)
 
-        logger.debug("Encoder: {}".format(encoder))
-        logger.debug("Decoder: {}".format(decoder))
+        logger.info("Encoder: {}".format(encoder))
+        logger.info("Decoder: {}".format(decoder))
         logger.info("Number of parameters (encoder): %i" % sum([p.numel() for p in encoder.parameters() if p.requires_grad]))
         logger.info("Number of parameters (decoder): %i" % sum([p.numel() for p in decoder.parameters() if p.requires_grad]))
 
