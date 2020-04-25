@@ -1,7 +1,7 @@
 #!/bin/bash
 
 CUR_DIR=`dirname $0`
-DATA_PATH=`realpath ${CUR_DIR}/../data/multi30k_bpe50k.lc.norm.tok`
+DATA_PATH=/data2/ozan/conceptual_captions/prep_data_50k_fixed/multi30k
 TRAIN=`realpath ${CUR_DIR}/../train.py`
 
 # Best pretrained checkpoint
