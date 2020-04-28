@@ -448,6 +448,15 @@ class TransformerModel(nn.Module):
         if langs is not None:
             langs = langs.transpose(0, 1)
 
+        # do not recompute cached elements
+        if cache is not None:
+            _slen = slen - cache['slen']
+            x = x[:, -_slen:]
+            positions = positions[:, -_slen:]
+            if langs is not None:
+                langs = langs[:, -_slen:]
+            mask = mask[:, -_slen:]
+            attn_mask = attn_mask[:, -_slen:]
 
         tensor = self.embeddings(x)
         tensor = tensor + self.position_embeddings(positions).expand_as(tensor)
@@ -483,7 +492,7 @@ class TransformerModel(nn.Module):
         for i in range(self.n_layers):
 
             # self attention
-            attn = self.attentions[i](tensor, mask, cache=cache)
+            attn = self.attentions[i](tensor, attn_mask, cache=cache)
             attn = F.dropout(attn, p=self.dropout, training=self.training)
             tensor = tensor + attn
             tensor = self.layer_norm1[i](tensor)
@@ -621,7 +630,7 @@ class TransformerModel(nn.Module):
 
         # add <EOS> to unfinished sentences
         if cur_len == max_len:
-            generated[-1].masked_fill_(unfinished_sents.byte(), self.eos_index)
+            generated[-1].masked_fill_(unfinished_sents.bool(), self.eos_index)
 
         # sanity check
         assert (generated == self.eos_index).sum() == 2 * bs
