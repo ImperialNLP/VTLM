@@ -32,7 +32,7 @@ NAME="${CKPT_NAME}_ftune_bs${BS}_lr${LR}"
 
 CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 
-ipython -i $TRAIN -- --beam_size 1 --exp_name ${NAME} --dump_path ${DUMP_PATH} \
+python $TRAIN --beam_size 1 --exp_name ${NAME} --dump_path ${DUMP_PATH} \
   --reload_model "${CKPT},${CKPT}" --data_path ${DATA_PATH} --encoder_only false \
   --lgs 'en-de' --mt_step "en-de" $PREV_ARGS \
   --dropout '0.1' --attention_dropout '0.1' --gelu_activation true \
