@@ -5,8 +5,20 @@ DUMP_PATH=/data/ozan/experiments/xlm_mmvc_multi30k_ftune
 CUR_DIR=`dirname $0`
 TRAIN=`realpath ${CUR_DIR}/../train.py`
 
-# Best pretrained checkpoint
-CKPT="/data/ozan/experiments/xlm_mmvc/concap_emb512_6l_8h_bs512_lr0.0005/r0z5yu8md4/best-valid_en_de_mlm_ppl.pth"
+CKPT="$1"
+
+if [ -z $CKPT ]; then
+  echo 'You need to provide a checkpoint .pth file for pretraining'
+  exit 1
+fi
+
+shift 1
+
+# sth like periodic-xxx.pth or best-...pth
+CKPT_NAME=`basename $CKPT | tr -- '-.' '_'`
+CKPT_ID=$(basename `dirname $CKPT`)
+CKPT_NAME="${CKPT_ID}_${CKPT_NAME}"
+
 LOG="`dirname $CKPT`/train.log"
 # Fetch previous args
 PREV_ARGS=`egrep '(emb_dim|n_layers|n_heads):' $LOG | sed 's#\s*\([a-z_]*\): \([0-9]*\)$#--\1 \2#'`
@@ -16,7 +28,7 @@ L1=`echo $PAIR | cut -d'-' -f1`
 EPOCH=`wc -l ${DATA_PATH}/train.${PAIR}.$L1 | head -n1 | cut -d' ' -f1`
 BS=${BS:-64}
 LR=${LR:-0.00001}
-NAME="ftune_bs${BS}_lr${LR}"
+NAME="${CKPT_NAME}_ftune_bs${BS}_lr${LR}"
 
 CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 
