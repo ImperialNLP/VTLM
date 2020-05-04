@@ -22,5 +22,5 @@ ipython -i train.py -- --exp_name $NAME --dump_path $DUMP_PATH --data_path $DATA
 --lgs 'en-de' --clm_steps '' --mlm_steps 'en-de' --emb_dim ${EMB} --n_layers ${NL} --n_heads ${NH} \
 --dropout 0.1 --attention_dropout 0.1 --gelu_activation true --batch_size ${BS} --bptt 256 \
 --optimizer "adam,lr=${LR}" --epoch_size ${EPOCH} --max_epoch 100000 \
---validation_metrics valid_en_de_mlm_ppl --stopping_criterion _valid_en_de_mlm_ppl,50 \
+--validation_metrics _valid_en_de_mlm_ppl --stopping_criterion _valid_en_de_mlm_ppl,50 \
 --fp16 false --save_periodic 10 $@
