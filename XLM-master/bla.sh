@@ -22,7 +22,7 @@ if [ $NGPU == "1" ]; then
     --lgs 'en-de' --clm_steps '' --mlm_steps 'en-de' --emb_dim 512 --n_layers 6 --n_heads 8 \
     --dropout 0.1 --attention_dropout 0.1 --gelu_activation true --batch_size 32 --bptt 256 \
     --optimizer adam,lr=0.0001 --epoch_size 300000 --max_epoch 100000 \
-    --validation_metrics valid_en_de_mlm_ppl --stopping_criterion _valid_en_de_mlm_ppl,50 \
+    --validation_metrics _valid_en_de_mlm_ppl --stopping_criterion _valid_en_de_mlm_ppl,50 \
     --fp16 false --save_periodic 2 ${RELOAD_MODEL_ARGS} $@
 else
   python -m torch.distributed.launch --nproc_per_node=$NGPU --nnodes=1 --node_rank=0 \
@@ -31,6 +31,6 @@ else
     --lgs 'en-de' --clm_steps '' --mlm_steps 'en-de' --emb_dim 512 --n_layers 6 --n_heads 8 \
     --dropout 0.1 --attention_dropout 0.1 --gelu_activation true --batch_size 32 --bptt 256 \
     --optimizer adam,lr=0.0001 --epoch_size 300000 --max_epoch 100000 \
-    --validation_metrics valid_en_de_mlm_ppl --stopping_criterion _valid_en_de_mlm_ppl,50 \
+    --validation_metrics _valid_en_de_mlm_ppl --stopping_criterion _valid_en_de_mlm_ppl,50 \
     --fp16 false --save_periodic 2 ${RELOAD_MODEL_ARGS} $@
 fi
