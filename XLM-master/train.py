@@ -265,6 +265,10 @@ def main(params):
     # set sampling probabilities for training
     set_sampling_probs(data, params)
     iter = 0
+
+    # dump initial weights
+    trainer.save_checkpoint('initial', include_optimizers=False)
+
     # language model training
     for _ in range(params.max_epoch):
 
