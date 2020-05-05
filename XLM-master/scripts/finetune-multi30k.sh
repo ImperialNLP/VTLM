@@ -1,6 +1,6 @@
 #!/bin/bash
 DATA_PATH=/data2/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe/multi30k
-DUMP_PATH=/data/ozan/experiments/xlm_mmvc_multi30k_ftune
+DUMP_PATH=/data/ozan/experiments/xlm_mmvc_multi30k_ftune_debug
 
 CUR_DIR=`dirname $0`
 TRAIN=`realpath ${CUR_DIR}/../train.py`
@@ -36,6 +36,6 @@ python $TRAIN --beam_size 1 --exp_name ${NAME} --dump_path ${DUMP_PATH} \
   --reload_model "${CKPT},${CKPT}" --data_path ${DATA_PATH} --encoder_only false \
   --lgs 'en-de' --mt_step "en-de" $PREV_ARGS \
   --dropout '0.1' --attention_dropout '0.1' --gelu_activation true \
-  --batch_size ${BS} --bptt 256 --optimizer "adam,lr=${LR}" \
-  --epoch_size ${EPOCH} --eval_bleu true \
-  --stopping_criterion 'valid_en-de_mt_bleu,20' --validation_metrics 'valid_en-de_mt_bleu' $@
+  --batch_size ${BS} --optimizer "adam,lr=${LR}" \
+  --epoch_size ${EPOCH} --eval_bleu true --max_epoch 50 \
+  --stopping_criterion 'valid_en-de_mt_bleu,10' --validation_metrics 'valid_en-de_mt_bleu' $@
