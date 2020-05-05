@@ -193,6 +193,11 @@ def get_parser():
                         help="Reload a pretrained model")
     parser.add_argument("--reload_checkpoint", type=str, default="",
                         help="Reload a checkpoint")
+    parser.add_argument("--init_dec_from_enc", action='store_true',
+                        help="Initialize missing decoder params from encoder layers.")
+    parser.add_argument("--freeze_encoder", action='store_true',
+                        help="Freeze encoder in enc-dec setups i.e MT finetuning.")
+
 
     # beam search (for MT only)
     parser.add_argument("--beam_size", type=int, default=1,

@@ -140,7 +140,8 @@ def build_model(params, dico):
 
     else:
         # build
-        encoder = TransformerModel(params, dico, is_encoder=True, with_output=True)  # TODO: only output when necessary - len(params.clm_steps + params.mlm_steps) > 0
+        # TODO: only output when necessary - len(params.clm_steps + params.mlm_steps) > 0
+        encoder = TransformerModel(params, dico, is_encoder=True, with_output=True)
         decoder = TransformerModel(params, dico, is_encoder=False, with_output=True)
 
         # reload pretrained word embeddings
@@ -161,7 +162,11 @@ def build_model(params, dico):
                 enc_reload = enc_reload['model' if 'model' in enc_reload else 'encoder']
                 if all([k.startswith('module.') for k in enc_reload.keys()]):
                     enc_reload = {k[len('module.'):]: v for k, v in enc_reload.items()}
-                encoder.load_state_dict(enc_reload)
+                enc_miss, enc_unexp = encoder.load_state_dict(enc_reload)
+                for name in sorted(enc_miss):
+                    logger.info(f'Encoder reloading: missing parameter {name} will be randomly initialized')
+                for name in sorted(enc_unexp):
+                    logger.info(f'Encoder reloading: unexpected parameter {name} ignored')
 
             # reload decoder
             if dec_path != '':
@@ -170,12 +175,28 @@ def build_model(params, dico):
                 dec_reload = dec_reload['model' if 'model' in dec_reload else 'decoder']
                 if all([k.startswith('module.') for k in dec_reload.keys()]):
                     dec_reload = {k[len('module.'):]: v for k, v in dec_reload.items()}
-                for i in range(params.n_layers):
-                    for name in DECODER_ONLY_PARAMS:
-                        if name % i not in dec_reload:
-                            logger.warning("Parameter %s not found." % (name % i))
-                            dec_reload[name % i] = decoder.state_dict()[name % i]
-                decoder.load_state_dict(dec_reload)
+
+                if params.init_dec_from_enc:
+                    # Init missing params from encoder params
+                    for i in range(params.n_layers):
+                        for name in DECODER_ONLY_PARAMS:
+                            if name % i not in dec_reload:
+                                enc_name = name.replace('encoder_attn', 'attentions')
+                                enc_name = enc_name.replace('layer_norm15', 'layer_norm1')
+                                dec_reload[name % i] = enc_reload[enc_name % i]
+                                logger.info(f'Reloading param {name % i} from param {enc_name % i}')
+                    decoder.load_state_dict(dec_reload, strict=True)
+                else:
+                    # load weights with strict=False to allow for missing parameters
+                    dec_miss, dec_unexp = decoder.load_state_dict(dec_reload, strict=False)
+                    for name in sorted(dec_miss):
+                        logger.info(f'Decoder reloading: missing parameter {name} will be randomly initialized')
+                    for name in sorted(dec_unexp):
+                        logger.info(f'Decoder reloading: unexpected parameter {name} ignored')
+
+            if params.freeze_encoder:
+                for param in encoder.parameters():
+                    param.requires_grad = False
 
         logger.info("Encoder: {}".format(encoder))
         logger.info("Decoder: {}".format(decoder))
