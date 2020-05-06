@@ -140,8 +140,7 @@ def build_model(params, dico):
 
     else:
         # build
-        # TODO: only output when necessary - len(params.clm_steps + params.mlm_steps) > 0
-        encoder = TransformerModel(params, dico, is_encoder=True, with_output=True)
+        encoder = TransformerModel(params, dico, is_encoder=True, with_output=params.encoder_output)
         decoder = TransformerModel(params, dico, is_encoder=False, with_output=True)
 
         # reload pretrained word embeddings
