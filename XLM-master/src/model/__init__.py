@@ -184,6 +184,9 @@ def build_model(params, dico):
                                 enc_name = enc_name.replace('layer_norm15', 'layer_norm1')
                                 dec_reload[name % i] = enc_reload[enc_name % i]
                                 logger.info(f'Reloading param {name % i} from param {enc_name % i}')
+                    if params.reset_dec_output_bias:
+                        logger.info('** Resetting decoder output bias')
+                        dec_reload['pred_layer.proj.bias'].fill_(0.0)
                     decoder.load_state_dict(dec_reload, strict=True)
                 else:
                     # load weights with strict=False to allow for missing parameters

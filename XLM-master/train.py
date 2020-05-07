@@ -197,6 +197,8 @@ def get_parser():
                         help="Reload a checkpoint")
     parser.add_argument("--init_dec_from_enc", action='store_true',
                         help="Initialize missing decoder params from encoder layers.")
+    parser.add_argument("--reset_dec_output_bias", action='store_true',
+                        help="If reloading model, reset output layer bias for decoder.")
     parser.add_argument("--freeze_encoder", action='store_true',
                         help="Freeze encoder in enc-dec setups i.e MT finetuning.")
 
