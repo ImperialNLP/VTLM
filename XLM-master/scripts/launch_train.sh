@@ -3,7 +3,7 @@
 # Allow default values to be defined if vars not defined
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 export DUMP_PATH=${DUMP_PATH:-/data/ozan/experiments/xlm_mmvc}
-export DATA_PATH=${DATA_PATH:-/data2/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe.uniq}
+export DATA_PATH=${DATA_PATH:-/data2/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe}
 
 mkdir -p $DUMP_PATH
 
@@ -22,5 +22,5 @@ ipython -i train.py -- --exp_name $NAME --dump_path $DUMP_PATH --data_path $DATA
 --lgs 'en-de' --clm_steps '' --mlm_steps 'en-de' --emb_dim ${EMB} --n_layers ${NL} --n_heads ${NH} \
 --dropout 0.1 --attention_dropout 0.1 --gelu_activation true --batch_size ${BS} --bptt 256 \
 --optimizer "adam,lr=${LR}" --epoch_size ${EPOCH} --max_epoch 100000 \
---validation_metrics _valid_en_de_mlm_ppl --stopping_criterion _valid_en_de_mlm_ppl,25 \
---fp16 false --save_periodic 10 $@
+--validation_metrics _valid_en_de_mlm_ppl --stopping_criterion _valid_en_de_mlm_ppl,50 \
+--fp16 false --save_periodic 2 $@
