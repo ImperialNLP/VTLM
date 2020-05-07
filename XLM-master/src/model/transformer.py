@@ -473,9 +473,8 @@ class TransformerModel(nn.Module):
 
             img_mask = torch.ones([mask.shape[0], self.num_of_regions], dtype=torch.bool).cuda()
             img_attn_mask = torch.ones([mask.shape[0], self.num_of_regions], dtype=torch.bool).cuda()
-            combined_mask = torch.cat((mask, img_mask), dim=1)
-            mask = torch.cat((attn_mask, img_attn_mask), dim=1)
-
+            mask = torch.cat((mask, img_mask), dim=1)
+            attn_mask = torch.cat((attn_mask, img_attn_mask), dim=1)
             # detection_classes
             image_regions = self.projector(get_image_properties(img_dict, "detection_features"))
             regional_encodings = self.regional_encodings(get_image_properties(img_dict, "detection_boxes"))
