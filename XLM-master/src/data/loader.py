@@ -275,6 +275,7 @@ def load_vpara_data(params, data):
             # create ParallelDataset
 
             existing_indices = np.array(existing_indices)
+            logger.info(f'Found {existing_indices.size} image features')
             dataset = ParallelDatasetWithRegions(
                 src_data['sentences'], src_data['positions'][existing_indices],
                 tgt_data['sentences'], tgt_data['positions'][existing_indices],
