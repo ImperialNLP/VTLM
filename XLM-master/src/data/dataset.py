@@ -408,7 +408,7 @@ class ParallelDataset(Dataset):
 
 class ParallelDatasetWithRegions(Dataset):
 
-    def __init__(self, sent1, pos1, sent2, pos2, image_names, params):
+    def __init__(self, sent1, pos1, sent2, pos2, image_names, masked_tokens, masked_object_labels, params):
         self.eos_index = params.eos_index
         self.pad_index = params.pad_index
         self.batch_size = params.batch_size
@@ -423,6 +423,9 @@ class ParallelDatasetWithRegions(Dataset):
         self.region_features_path = params.region_feats_path
         self.lengths1 = self.pos1[:, 1] - self.pos1[:, 0]
         self.lengths2 = self.pos2[:, 1] - self.pos2[:, 0]
+        self.masked_tokens = np.array(masked_tokens)
+        self.masked_object_labels = np.array(masked_object_labels)
+
         # # check number of sentences
         # assert len(self.pos1) == (self.sent1 == self.eos_index).sum()
         # assert len(self.pos2) == (self.sent2 == self.eos_index).sum()
@@ -522,16 +525,13 @@ class ParallelDatasetWithRegions(Dataset):
         Return a sentences iterator, given the associated sentence batches.
         """
         assert type(return_indices) is bool
-
+        masked_tokens, masked_object_id = None, None
         for sentence_ids in batches:
             if 0 < self.max_batch_size < len(sentence_ids):
                 np.random.shuffle(sentence_ids)
                 sentence_ids = sentence_ids[:self.max_batch_size]
 
-            pos1 = self.pos1[sentence_ids]
-            pos2 = self.pos2[sentence_ids]
-
-            image_name_with_indices  =zip(sentence_ids, self.image_names[sentence_ids])
+            image_name_with_indices = zip(sentence_ids, self.image_names[sentence_ids])
             image_features, good_indices = self.load_images(self.region_features_path, image_name_with_indices)
             image_scores = self.batch_images(image_features, feat_type="detection_scores")
             img_all_dict = image_features
@@ -541,9 +541,12 @@ class ParallelDatasetWithRegions(Dataset):
             pos2 = self.pos2[good_indices]
             sent1 = self.batch_sentences([self.sent1[a:b] for a, b in pos1])
             sent2 = self.batch_sentences([self.sent2[a:b] for a, b in pos2])
-            yield (sent1, sent2, image_scores, img_all_dict, sentence_ids) if return_indices else (sent1, sent2,
+            if self.masked_tokens is not None and self.masked_object_labels is not None:
+                masked_tokens = self.masked_tokens[good_indices]
+                masked_object_id = self.masked_object_labels[good_indices]
+            yield (sent1, sent2, image_scores, img_all_dict, masked_tokens, masked_object_id, sentence_ids) if return_indices else (sent1, sent2,
                                                                                                      image_scores,
-                                                                                                     img_all_dict)
+                                                                                                     img_all_dict,masked_tokens, masked_object_id)
 
     def get_iterator(self, shuffle, group_by_size=False, n_sentences=-1, return_indices=False):
         """
@@ -596,7 +599,6 @@ class ParallelDatasetWithRegions(Dataset):
         """
         # sentences = sorted(sentences, key=lambda x: len(x), reverse=True)
         lengths = torch.LongTensor([len(s[feat_type]) for s in images])
-
         imgs = torch.LongTensor(lengths.max().item(), lengths.size(0)).fill_(self.pad_index)
         # imgs[0] = self.bor_index
         for i, img in enumerate(images):

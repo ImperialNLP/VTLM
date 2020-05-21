@@ -269,6 +269,22 @@ def load_vpara_data(params, data):
                     image_names.append(line)
                     existing_indices.append(i)
 
+            masked_tokens = None
+            masked_object_labels = None
+            if params.mask_file_dir:
+                masked_tokens = []
+                masked_object_labels = []
+                with open(os.path.join(params.mask_file_dir, "mask." + splt), "r") as masked_file:
+                    for info in masked_file.readlines():
+                        info = info.strip().split("\t")
+                        word_indices = []
+                        for word in info[2].split(","):
+                            if word in data["dico"].word2id:
+                                word_indices.append(data["dico"].word2id[word])
+                        masked_tokens.append(word_indices)
+                        masked_object_labels.append(info[1].split(","))
+
+
             # update dictionary parameters
             set_dico_parameters(params, data, src_data['dico'])
             set_dico_parameters(params, data, tgt_data['dico'])
@@ -280,6 +296,8 @@ def load_vpara_data(params, data):
                 src_data['sentences'], src_data['positions'][existing_indices],
                 tgt_data['sentences'], tgt_data['positions'][existing_indices],
                 image_names,
+                masked_tokens,
+                masked_object_labels,
                 params
             )
 

@@ -476,7 +476,7 @@ class Trainer(object):
         words, lengths = self.word_blank(words, lengths)
         return words, lengths
 
-    def mask_out_image(self, img_dict):
+    def mask_out_image(self, img_dict, masked_labels=None):
 
 
         params = self.params
@@ -487,8 +487,18 @@ class Trainer(object):
         x = x.t()
         slen, bs = x.size()
 
+        if masked_labels is not None:
+            pred_mask = np.random.rand(slen, bs) <= params.word_pred
+            pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
+            # Reset  part
+            for i,token_ids in enumerate(masked_labels):
+                for token_id in token_ids:
+                    token_id = int(token_id)
+                    # remove mask specific tokens
+                    if token_id in x[:, i]:
+                        pred_mask[:,i][x[:,i] == token_id] = 0
         # define target words to predict
-        if params.sample_alpha == 0:
+        elif params.sample_alpha == 0:
             pred_mask = np.random.rand(slen, bs) <= params.word_pred
             pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
         else:
@@ -524,7 +534,7 @@ class Trainer(object):
         return x, _x_real, pred_mask
 
 
-    def mask_out(self, x, lengths):
+    def mask_out(self, x, lengths, masked_tokens=None, langs=None):
         """
         Decide of random words to mask out, and what target they get assigned.
         """
@@ -532,7 +542,24 @@ class Trainer(object):
         slen, bs = x.size()
 
         # define target words to predict
-        if params.sample_alpha == 0:
+        if masked_tokens is not None:
+            pred_mask = np.random.rand(slen, bs) <= params.word_pred
+            pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
+            # Reset english part
+            pred_mask[langs == params.lang2id["en"]] = 0
+            for i,token_ids in enumerate(masked_tokens):
+                masked_cnt = 0
+                for token_id in token_ids:
+                    # mask specific tokens
+                    if token_id in x[:, i]:
+                        pred_mask[:,i][x[:,i] == token_id] = 1
+                        masked_cnt+=1
+                if masked_cnt == 0:
+                    pred_mask_recreated = np.random.rand(slen) <= params.word_pred
+                    pred_mask_recreated = torch.from_numpy(pred_mask_recreated.astype(np.bool))
+                    pred_mask[:, i] = pred_mask_recreated
+
+        elif params.sample_alpha == 0:
             pred_mask = np.random.rand(slen, bs) <= params.word_pred
             pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
         else:
@@ -543,9 +570,10 @@ class Trainer(object):
             pred_mask[tgt_ids] = 1
             pred_mask = pred_mask.view(slen, bs)
 
+
         # do not predict padding
         pred_mask[x == params.pad_index] = 0
-        #pred_mask[0] = 0  # TODO: remove
+        pred_mask[0] = 0  # TODO: remove
 
         # generate possible targets / update x input
         _x_real = x[pred_mask]
@@ -595,23 +623,13 @@ class Trainer(object):
         lang1_id = params.lang2id[lang1]
         lang2_id = params.lang2id[lang2] if lang2 is not None else None
 
-        if lang2 is None:
-            x, lengths = self.get_batch_vpara(name, lang1, stream=True)
-            positions = None
-            langs = x.clone().fill_(lang1_id) if params.n_langs > 1 else None
-        elif lang1 == lang2:
-            (x1, len1) = self.get_batch_vpara(name, lang1)
-            (x2, len2) = (x1, len1)
-            (x1, len1) = self.add_noise(x1, len1)
-            x, lengths, positions, langs = concat_batches(x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index, params.eos_index, reset_positions=False)
-        else:
-            (img_dict), (img1, len_img1), (x1, len1), (x2, len2) = self.get_batch_vpara(name, lang1, lang2)
-            # menekse: img1 and leng_im1 only used for getting length of the image portion
-            x, lengths, positions, langs, image_langs = concat_batches_triple(x1, len1, lang1_id, x2, len2, lang2_id, img1,
-                                                                 len_img1, params.lang2id["img"], params.pad_index,
-                                                                        params.eos_index, reset_positions=True)
+        (masked_object_ids), (masked_tokens), (img_dict), (img1, len_img1), (x1, len1), (x2, len2) = self.get_batch_vpara(name, lang1, lang2)
+        # menekse: img1 and leng_im1 only used for getting length of the image portion
+        x, lengths, positions, langs, image_langs = concat_batches_triple(x1, len1, lang1_id, x2, len2, lang2_id, img1,
+                                                             len_img1, params.lang2id["img"], params.pad_index,
+                                                                    params.eos_index, reset_positions=True)
 
-        return x, lengths, positions, langs, image_langs, img_dict, (None, None) if lang2 is None else (len1, len2)
+        return x, lengths, positions, langs, image_langs, img_dict, masked_object_ids, masked_tokens,  (None, None)
 
     def save_checkpoint(self, name, include_optimizers=True):
         """
@@ -871,11 +889,11 @@ class Trainer(object):
         model.train()
 
         # generate batch / select words to predict
-        x, lengths, positions, langs, image_langs, img_dict, _ = self.generate_batch_vpara(lang1, lang2, 'pred_object')
+        x, lengths, positions, langs, image_langs, img_dict, masked_object_ids, masked_tokens, _ = self.generate_batch_vpara(lang1, lang2, 'pred_object')
         x, lengths, positions, langs, _ = self.round_batch(x, lengths, positions, langs)
 
-        x, y, pred_mask = self.mask_out(x, lengths)
-        img_x, img_y, img_pred_mask = self.mask_out_image(img_dict)
+        x, y, pred_mask = self.mask_out(x, lengths, masked_tokens, langs)
+        img_x, img_y, img_pred_mask = self.mask_out_image(img_dict, masked_object_ids)
 
         pred_mask = torch.cat((pred_mask,img_pred_mask))
 

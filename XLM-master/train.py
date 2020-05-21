@@ -75,6 +75,9 @@ def get_parser():
 
     parser.add_argument("--only_vlm", type=bool_flag, default=False,
                         help="Run only vlm step")
+
+    parser.add_argument("--mask_file_dir", type=str, default=None,
+                        help="dir contains masked files")
     # memory parameters
     parser.add_argument("--use_memory", type=bool_flag, default=False,
                         help="Use an external memory")
