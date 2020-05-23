@@ -493,6 +493,8 @@ class Trainer(object):
             # Reset  part
             for i,token_ids in enumerate(masked_labels):
                 for token_id in token_ids:
+                    if "-" in token_id:
+                        continue
                     token_id = int(token_id)
                     # remove mask specific tokens
                     if token_id in x[:, i]:

@@ -278,9 +278,10 @@ def load_vpara_data(params, data):
                     for info in masked_file.readlines():
                         info = info.strip().split("\t")
                         word_indices = []
-                        for word in info[2].split(","):
-                            if word in data["dico"].word2id:
-                                word_indices.append(data["dico"].word2id[word])
+                        for w in info[2].split(","):
+                            for word in w.split():
+                                if word in data["dico"].word2id:
+                                    word_indices.append(data["dico"].word2id[word])
                         masked_tokens.append(word_indices)
                         masked_object_labels.append(info[1].split(","))
 

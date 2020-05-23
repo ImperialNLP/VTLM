@@ -607,8 +607,8 @@ class ParallelDatasetWithRegions(Dataset):
                 imgs[0:lengths[i], i].copy_(torch.from_numpy(feat.astype(np.int64)))
                 # imgs[lengths[i] - 1, i] = self.eor_index
             except Exception as e:
-                print(feat.shape)
-                print(lengths[i], len(lengths[i]))
+                #print(feat.shape)
+                #print(lengths[i], len(lengths[i]))
                 print(e)
         return imgs, lengths
 
