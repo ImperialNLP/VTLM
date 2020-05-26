@@ -13,6 +13,8 @@ import os
 import pickle
 import bz2
 
+from torch.utils.data import Sampler
+
 logger = getLogger()
 
 
@@ -423,8 +425,12 @@ class ParallelDatasetWithRegions(Dataset):
         self.region_features_path = params.region_feats_path
         self.lengths1 = self.pos1[:, 1] - self.pos1[:, 0]
         self.lengths2 = self.pos2[:, 1] - self.pos2[:, 0]
-        self.masked_tokens = np.array(masked_tokens)
-        self.masked_object_labels = np.array(masked_object_labels)
+        if masked_tokens is not None and masked_object_labels is not None:
+            self.masked_tokens = np.array(masked_tokens)
+            self.masked_object_labels = np.array(masked_object_labels)
+        else:
+            self.masked_tokens = None
+            self.masked_object_labels = None
 
         # # check number of sentences
         # assert len(self.pos1) == (self.sent1 == self.eos_index).sum()
@@ -621,7 +627,7 @@ class ParallelDatasetWithRegions(Dataset):
                 f_name = os.path.join(region_features_path, image_name)
                 with open(f_name, "rb") as f:
                     x = pickle.load(f)
-                    if len(x) != 0:
+                    if len(x) != 0 and len(x["detection_scores"]) == 36:
                         img_data.append(x)
                         good_indices.append(ind)
                     else:
@@ -632,3 +638,4 @@ class ParallelDatasetWithRegions(Dataset):
                     pass
 
         return img_data, good_indices
+
