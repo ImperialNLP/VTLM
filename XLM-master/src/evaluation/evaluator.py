@@ -231,9 +231,7 @@ class Evaluator(object):
                 for lang1, lang2 in params.clm_steps:
                     self.evaluate_clm(scores, data_set, lang1, lang2)
 
-                #TODO fix MLM evaluation
-
-                #prediction task (evaluate perplexity and accuracy)
+                # prediction task (evaluate perplexity and accuracy)
                 for lang1, lang2 in params.mlm_steps:
                     self.evaluate_mlm(scores, data_set, lang1, lang2)
 
@@ -252,11 +250,9 @@ class Evaluator(object):
                     scores['%s_clm_acc' % data_set] = np.mean([scores['%s_%s_clm_acc' % (data_set, lang)] for lang in _clm_mono])
                 _mlm_mono = [l1 for (l1, l2) in params.mlm_steps if l2 is None]
 
-                #TODO fix MLM evaluation
-
-                # if len(_mlm_mono) > 0:
-                #     scores['%s_mlm_ppl' % data_set] = np.mean([scores['%s_%s_mlm_ppl' % (data_set, lang)] for lang in _mlm_mono])
-                #     scores['%s_mlm_acc' % data_set] = np.mean([scores['%s_%s_mlm_acc' % (data_set, lang)] for lang in _mlm_mono])
+                if len(_mlm_mono) > 0:
+                    scores['%s_mlm_ppl' % data_set] = np.mean([scores['%s_%s_mlm_ppl' % (data_set, lang)] for lang in _mlm_mono])
+                    scores['%s_mlm_acc' % data_set] = np.mean([scores['%s_%s_mlm_acc' % (data_set, lang)] for lang in _mlm_mono])
 
         return scores
 
