@@ -130,6 +130,7 @@ class Trainer(object):
             [('PC-%s-%s' % (l1, l2), []) for l1, l2 in params.pc_steps] +
             [('AE-%s' % lang, []) for lang in params.ae_steps] +
             [('MT-%s-%s' % (l1, l2), []) for l1, l2 in params.mt_steps] +
+            [('MMT-%s-%s' % (l1, l2), []) for l1, l2 in params.mmt_steps] +
             [('BT-%s-%s-%s' % (l1, l2, l3), []) for l1, l2, l3 in params.bt_steps]
         )
         self.last_time = time.time()
@@ -309,11 +310,19 @@ class Trainer(object):
         else:
             assert stream is False
             _lang1, _lang2 = (lang1, lang2) if lang1 < lang2 else (lang2, lang1)
-            iterator = self.data['para'][(_lang1, _lang2)]['train'].get_iterator(
-                shuffle=True,
-                group_by_size=self.params.group_by_size,
-                n_sentences=-1,
-            )
+
+            if iter_name == "mmt":
+                iterator = self.data['vpara'][(_lang1, _lang2)]['train'].get_iterator(
+                    shuffle=True,
+                    group_by_size=self.params.group_by_size,
+                    n_sentences=-1,
+                )
+            else:
+                iterator = self.data['para'][(_lang1, _lang2)]['train'].get_iterator(
+                    shuffle=True,
+                    group_by_size=self.params.group_by_size,
+                    n_sentences=-1,
+                )
 
         self.iterators[(iter_name, lang1, lang2)] = iterator
         return iterator
@@ -344,6 +353,7 @@ class Trainer(object):
 
         self.iterators[(iter_name, lang1, lang2)] = iterator
         return iterator
+
     def get_batch(self, iter_name,
 
                   lang1, lang2=None, stream=False):
@@ -354,6 +364,7 @@ class Trainer(object):
         assert lang2 is None or lang2 in self.params.langs
         assert stream is False or lang2 is None
         iterator = self.iterators.get((iter_name, lang1, lang2), None)
+
         if iterator is None:
             iterator = self.get_iterator(iter_name, lang1, lang2, stream)
         try:
@@ -737,7 +748,8 @@ class Trainer(object):
         End the epoch.
         """
         # stop if the stopping criterion has not improved after a certain number of epochs
-        if self.stopping_criterion is not None and (self.params.is_master or not self.stopping_criterion[0].endswith('_mt_bleu')):
+        if self.stopping_criterion is not None and (self.params.is_master or not self.stopping_criterion[0].endswith('_mt_bleu')
+                                                    or not self.stopping_criterion[0].endswith('_mmt_bleu')):
             metric, biggest = self.stopping_criterion
             assert metric in scores, metric
             factor = 1 if biggest else -1
@@ -1039,13 +1051,7 @@ class EncDecTrainer(Trainer):
         lang1_id = params.lang2id[lang1]
         lang2_id = params.lang2id[lang2]
 
-        # generate batch
-        if lang1 == lang2:
-            (x1, len1) = self.get_batch('ae', lang1)
-            (x2, len2) = (x1, len1)
-            (x1, len1) = self.add_noise(x1, len1)
-        else:
-            (x1, len1), (x2, len2) = self.get_batch('mt', lang1, lang2)
+        (x1, len1), (x2, len2) = self.get_batch('mt', lang1, lang2)
         langs1 = x1.clone().fill_(lang1_id)
         langs2 = x2.clone().fill_(lang2_id)
 
@@ -1068,6 +1074,59 @@ class EncDecTrainer(Trainer):
         # loss
         _, loss = self.decoder('predict', tensor=dec2, pred_mask=pred_mask, y=y, get_scores=False)
         self.stats[('AE-%s' % lang1) if lang1 == lang2 else ('MT-%s-%s' % (lang1, lang2))].append(loss.item())
+        loss = lambda_coeff * loss
+
+        # optimize
+        self.optimize(loss)
+
+        # number of processed sentences / words
+        self.n_sentences += params.batch_size
+        self.stats['processed_s'] += len2.size(0)
+        self.stats['processed_w'] += (len2 - 1).sum().item()
+
+    def mmt_step(self, lang1, lang2, lambda_coeff):
+        """
+        Multimodal Machine translation step.
+        """
+        assert lambda_coeff >= 0
+        if lambda_coeff == 0:
+            return
+        params = self.params
+        self.encoder.train()
+        self.decoder.train()
+
+        lang1_id = params.lang2id[lang1]
+        lang2_id = params.lang2id[lang2]
+        img_id = params.lang2id["img"]
+
+        # generate batch
+        _, _, img_dict, (img1, img_len), (x1, len1), (x2, len2) = self.get_batch('mmt', lang1, lang2)
+
+        langs1 = x1.clone().fill_(lang1_id)
+        langs2 = x2.clone().fill_(lang2_id)
+        img_langs = img1.clone().fill_(img_id)
+
+        # target words to predict
+        alen = torch.arange(len2.max(), dtype=torch.long, device=len2.device)
+        pred_mask = alen[:, None] < len2[None] - 1  # do not predict anything given the last target word
+        y = x2[1:].masked_select(pred_mask[:-1])
+        assert len(y) == (len2 - 1).sum().item()
+
+        # cuda
+        x1, len1, langs1, x2, len2, langs2, y, img1, img_len, img_langs = to_cuda(x1, len1, langs1, x2, len2, langs2, y,
+                                                                       img1, img_len, img_langs)
+
+        # encode source sentence
+        enc1 = self.encoder('fwd', x=x1, lengths=len1, langs=langs1, image_langs=img_langs, img_dict=img_dict,
+                            causal=False)
+        enc1 = enc1.transpose(0, 1)
+
+        # decode target sentence
+        dec2 = self.decoder('fwd', x=x2, lengths=len2, langs=langs2, causal=True, src_enc=enc1, src_len=len1+img_len)
+
+        # loss
+        _, loss = self.decoder('predict', tensor=dec2, pred_mask=pred_mask, y=y, get_scores=False)
+        self.stats[('AE-%s' % lang1) if lang1 == lang2 else ('MMT-%s-%s' % (lang1, lang2))].append(loss.item())
         loss = lambda_coeff * loss
 
         # optimize
