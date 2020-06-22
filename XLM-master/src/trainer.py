@@ -17,7 +17,7 @@ from torch import nn
 from torch.nn import functional as F
 from torch.nn.utils import clip_grad_norm_
 import apex
-
+import random
 from .optim import get_optimizer
 from .utils import to_cuda, concat_batches, find_modules, concat_batches_triple, get_image_properties
 from .utils import parse_lambda_config, update_lambdas
@@ -554,8 +554,9 @@ class Trainer(object):
                 for token_id in token_ids:
                     # mask specific tokens
                     if token_id in x[:, i]:
-                        pred_mask[:,i][x[:,i] == token_id] = 1
-                        masked_cnt+=1
+                        if random.random() < 0.5:
+                            pred_mask[:,i][x[:,i] == token_id] = 1
+                            masked_cnt+=1
                 if masked_cnt == 0:
                     pred_mask_recreated = np.random.rand(slen) <= params.word_pred
                     pred_mask_recreated = torch.from_numpy(pred_mask_recreated.astype(np.bool))
