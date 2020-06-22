@@ -172,7 +172,7 @@ def load_para_data(params, data):
     """
     data['para'] = {}
 
-    required_para_train = set(params.clm_steps + params.mlm_steps + params.pc_steps + params.mt_steps)
+    required_para_train = set(params.clm_steps + params.mlm_steps + params.pc_steps + params.mt_steps + params.mmt_steps)
 
 
     for src, tgt in params.para_dataset.keys():
@@ -237,7 +237,7 @@ def load_vpara_data(params, data):
     """
     data['vpara'] = {}
 
-    required_para_train = set(params.clm_steps + params.mlm_steps + params.pc_steps + params.mt_steps)
+    required_para_train = set(params.clm_steps + params.mlm_steps + params.pc_steps + params.mt_steps + params.mmt_steps)
 
     for src, tgt in params.para_dataset.keys():
 
@@ -370,6 +370,8 @@ def check_data_params(params):
 
     # machine translation steps
     params.mt_steps = [tuple(s.split('-')) for s in params.mt_steps.split(',') if len(s) > 0]
+    params.mmt_steps = [tuple(s.split('-')) for s in params.mmt_steps.split(',') if len(s) > 0]
+
     assert all([len(x) == 2 for x in params.mt_steps])
     assert all([l1 in params.langs and l2 in params.langs for l1, l2 in params.mt_steps])
     assert all([l1 != l2 for l1, l2 in params.mt_steps])
@@ -406,7 +408,7 @@ def check_data_params(params):
     assert all([all([os.path.isfile(p) for p in paths.values()]) for paths in params.mono_dataset.values()])
 
     # check parallel datasets
-    required_para_train = set(params.clm_steps + params.mlm_steps + params.pc_steps + params.mt_steps)
+    required_para_train = set(params.clm_steps + params.mlm_steps + params.pc_steps + params.mt_steps + params.mmt_steps)
     required_para = required_para_train | set([(l2, l3) for _, l2, l3 in params.bt_steps])
     params.para_dataset = {
         (src, tgt): {
@@ -435,7 +437,7 @@ def check_data_params(params):
     assert all([all([os.path.isfile(p1) and os.path.isfile(p2) for p1, p2 in paths.values()]) for paths in params.para_dataset.values()])
 
     # check that we can evaluate on BLEU
-    assert params.eval_bleu is False or len(params.mt_steps + params.bt_steps) > 0
+    assert params.eval_bleu is False or len(params.mt_steps + params.mmt_steps + params.bt_steps) > 0
 
 
 def load_data(params):
@@ -453,7 +455,7 @@ def load_data(params):
 
     # parallel datasets
     load_para_data(params, data)
-    if params.only_vlm:
+    if params.only_vlm or params.mmt_steps:
         load_vpara_data(params,data)
 
     # monolingual data summary

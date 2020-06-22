@@ -134,11 +134,19 @@ class Evaluator(object):
         else:
             assert stream is False
             _lang1, _lang2 = (lang1, lang2) if lang1 < lang2 else (lang2, lang1)
-            iterator = self.data['para'][(_lang1, _lang2)][data_set].get_iterator(
-                shuffle=False,
-                group_by_size=True,
-                n_sentences=n_sentences
-            )
+
+            if self.params.mmt_steps:
+                iterator = self.data['vpara'][(_lang1, _lang2)][data_set].get_iterator(
+                    shuffle=False,
+                    group_by_size=True,
+                    n_sentences=n_sentences
+                )
+            else:
+                iterator = self.data['para'][(_lang1, _lang2)][data_set].get_iterator(
+                    shuffle=False,
+                    group_by_size=True,
+                    n_sentences=n_sentences
+                )
 
         for batch in iterator:
             yield batch if lang2 is None or lang1 < lang2 else batch[::-1]
@@ -169,7 +177,7 @@ class Evaluator(object):
                 lang2_txt = []
 
                 # convert to text
-                for (sent1, len1), (sent2, len2) in self.get_iterator(data_set, lang1, lang2):
+                for (sent1, len1), (sent2, len2), (img, img_len), _, _, _ in self.get_iterator(data_set, lang1, lang2):
                     lang1_txt.extend(convert_to_text(sent1, len1, self.dico, params))
                     lang2_txt.extend(convert_to_text(sent2, len2, self.dico, params))
 
@@ -234,6 +242,10 @@ class Evaluator(object):
                 # prediction task (evaluate perplexity and accuracy)
                 for lang1, lang2 in params.mlm_steps:
                     self.evaluate_mlm(scores, data_set, lang1, lang2)
+
+                for lang1, lang2 in params.mmt_steps:
+                    eval_bleu = params.eval_bleu and params.is_master
+                    self.evaluate_mmt(scores, data_set, lang1, lang2, eval_bleu)
 
                 # machine translation task (evaluate perplexity and accuracy)
                 for lang1, lang2 in set(params.mt_steps + [(l2, l3) for _, l2, l3 in params.bt_steps]):
@@ -488,6 +500,122 @@ class EncDecEvaluator(Evaluator):
         self.encoder = trainer.encoder
         self.decoder = trainer.decoder
 
+    def evaluate_mmt(self, scores, data_set, lang1, lang2, eval_bleu):
+        """
+        Evaluate perplexity and next word prediction accuracy.
+        """
+        params = self.params
+        assert data_set in ['valid', 'test']
+        assert lang1 in params.langs
+        assert lang2 in params.langs
+
+        self.encoder.eval()
+        self.decoder.eval()
+        encoder = self.encoder.module if params.multi_gpu else self.encoder
+        decoder = self.decoder.module if params.multi_gpu else self.decoder
+
+        params = params
+        lang1_id = params.lang2id[lang1]
+        lang2_id = params.lang2id[lang2]
+        img_id = params.lang2id["img"]
+
+        n_words = 0
+        xe_loss = 0
+        n_valid = 0
+
+        # only save states / evaluate usage on the validation set
+        eval_memory = params.use_memory and data_set == 'valid' and self.params.is_master
+        HashingMemory.EVAL_MEMORY = eval_memory
+        if eval_memory:
+            all_mem_att = {k: [] for k, _ in self.memory_list}
+
+        # store hypothesis to compute BLEU score
+        if eval_bleu:
+            hypothesis = []
+
+        for batch in self.get_iterator(data_set, lang1, lang2):
+
+            # generate batch
+            _, _, img_dict, (imgs, img_len), (x1, len1), (x2, len2) = batch
+            langs1 = x1.clone().fill_(lang1_id)
+            langs2 = x2.clone().fill_(lang2_id)
+            img_langs = imgs.clone().fill_(img_id)
+
+            # target words to predict
+            alen = torch.arange(len2.max(), dtype=torch.long, device=len2.device)
+            pred_mask = alen[:, None] < len2[None] - 1  # do not predict anything given the last target word
+            y = x2[1:].masked_select(pred_mask[:-1])
+            assert len(y) == (len2 - 1).sum().item()
+
+            # cuda
+            x1, len1, langs1, x2, len2, langs2, y, img1, img_len, img_langs = to_cuda(x1, len1, langs1, x2, len2,
+                                                                                      langs2, y,
+                                                                                      imgs, img_len, img_langs)
+
+            # encode source sentence
+            enc1 = self.encoder('fwd', x=x1, lengths=len1, langs=langs1, image_langs=img_langs, img_dict=img_dict,
+                                causal=False)
+
+            # encode source sentence
+            enc1 = enc1.transpose(0, 1)
+            enc1 = enc1.half() if params.fp16 else enc1
+
+            # decode target sentence
+            dec2 = decoder('fwd', x=x2, lengths=len2, langs=langs2, causal=True, src_enc=enc1, src_len=len1+img_len)
+
+            # loss
+            word_scores, loss = decoder('predict', tensor=dec2, pred_mask=pred_mask, y=y, get_scores=True)
+
+            # update stats
+            n_words += y.size(0)
+            xe_loss += loss.item() * len(y)
+            n_valid += (word_scores.max(1)[1] == y).sum().item()
+            if eval_memory:
+                for k, v in self.memory_list:
+                    all_mem_att[k].append((v.last_indices, v.last_scores))
+
+            # generate translation - translate / convert to text
+            if eval_bleu:
+                max_len = int(1.5 * len1.max().item() + 10)
+                if params.beam_size == 1:
+                    generated, lengths = decoder.generate(enc1, len1+img_len, lang2_id, max_len=max_len)
+                else:
+                    generated, lengths = decoder.generate_beam(
+                        enc1, len1, lang2_id, beam_size=params.beam_size,
+                        length_penalty=params.length_penalty,
+                        early_stopping=params.early_stopping,
+                        max_len=max_len
+                    )
+                hypothesis.extend(convert_to_text(generated, lengths, self.dico, params))
+
+        # compute perplexity and prediction accuracy
+        scores['%s_%s-%s_mt_ppl' % (data_set, lang1, lang2)] = np.exp(xe_loss / n_words)
+        scores['%s_%s-%s_mt_acc' % (data_set, lang1, lang2)] = 100. * n_valid / n_words
+
+        # compute memory usage
+        if eval_memory:
+            for mem_name, mem_att in all_mem_att.items():
+                eval_memory_usage(scores, '%s_%s-%s_%s' % (data_set, lang1, lang2, mem_name), mem_att, params.mem_size)
+
+        # compute BLEU
+        if eval_bleu:
+
+            # hypothesis / reference paths
+            hyp_name = 'hyp{0}.{1}-{2}.{3}.txt'.format(scores['epoch'], lang1, lang2, data_set)
+            hyp_path = os.path.join(params.hyp_path, hyp_name)
+            ref_path = params.ref_paths[(lang1, lang2, data_set)]
+
+            # export sentences to hypothesis file / restore BPE segmentation
+            with open(hyp_path, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(hypothesis) + '\n')
+            restore_segmentation(hyp_path)
+
+            # evaluate BLEU score
+            bleu = eval_moses_bleu(ref_path, hyp_path)
+            logger.info("BLEU %s %s : %f" % (hyp_path, ref_path, bleu))
+            scores['%s_%s-%s_mmt_bleu' % (data_set, lang1, lang2)] = bleu
+
+
     def evaluate_mt(self, scores, data_set, lang1, lang2, eval_bleu):
         """
         Evaluate perplexity and next word prediction accuracy.
@@ -595,8 +723,6 @@ class EncDecEvaluator(Evaluator):
             bleu = eval_moses_bleu(ref_path, hyp_path)
             logger.info("BLEU %s %s : %f" % (hyp_path, ref_path, bleu))
             scores['%s_%s-%s_mt_bleu' % (data_set, lang1, lang2)] = bleu
-
-
 def convert_to_text(batch, lengths, dico, params):
     """
     Convert a batch of sentences to a list of text sentences.
