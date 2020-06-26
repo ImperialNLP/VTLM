@@ -35,7 +35,7 @@ CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 python $TRAIN --beam_size 1 --exp_name ${NAME} --dump_path ${DUMP_PATH} \
   --reload_model "${CKPT},${CKPT}" --data_path ${DATA_PATH} --encoder_only false \
   --lgs 'en-de' --mt_step "en-de" $PREV_ARGS \
-  --dropout '0.1' --attention_dropout '0.1' --gelu_activation true \
+  --dropout '0.2' --attention_dropout '0.1' --gelu_activation true \
   --batch_size ${BS} --optimizer "adam,lr=${LR}" \
-  --epoch_size ${EPOCH} --eval_bleu true --max_epoch 50 \
+  --epoch_size ${EPOCH} --eval_bleu true --max_epoch 80 \
   --stopping_criterion 'valid_en-de_mt_bleu,10' --validation_metrics 'valid_en-de_mt_bleu' $@
