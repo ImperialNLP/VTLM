@@ -177,9 +177,14 @@ class Evaluator(object):
                 lang2_txt = []
 
                 # convert to text
-                for (sent1, len1), (sent2, len2) in self.get_iterator(data_set, lang1, lang2):
-                    lang1_txt.extend(convert_to_text(sent1, len1, self.dico, params))
-                    lang2_txt.extend(convert_to_text(sent2, len2, self.dico, params))
+                if params.mmt_steps:
+                    for (sent1, len1), (sent2, len2), (img, img_len), _, _, _ in self.get_iterator(data_set, lang1, lang2):
+                        lang1_txt.extend(convert_to_text(sent1, len1, self.dico, params))
+                        lang2_txt.extend(convert_to_text(sent2, len2, self.dico, params))
+                else:
+                    for (sent1, len1), (sent2, len2) in self.get_iterator(data_set, lang1, lang2):
+                        lang1_txt.extend(convert_to_text(sent1, len1, self.dico, params))
+                        lang2_txt.extend(convert_to_text(sent2, len2, self.dico, params))
 
                 # replace <unk> by <<unk>> as these tokens cannot be counted in BLEU
                 lang1_txt = [x.replace('<unk>', '<<unk>>') for x in lang1_txt]
