@@ -165,8 +165,8 @@ if __name__ == '__main__':
     for idx in tqdm.tqdm(idxs, ncols=50):
         orig_img_name = image_list[idx].split('/')[-1]
         # to be compatible with Hacettepe file naming (0-indexed)
-        dump_img_name = str(int(orig_img_name) - args.img_offset)
-        dump_fname = str(out_folder / dump_img_name) + dump_suffix
+        #dump_img_name = str(int(orig_img_name) - args.img_offset)
+        dump_fname = str(out_folder / orig_img_name) + dump_suffix
 
         try:
             img = next(itd)
