@@ -471,8 +471,8 @@ class TransformerModel(nn.Module):
         if img_dict is not None and image_langs is not None:
             image_langs = image_langs.transpose(0, 1)
 
-            img_mask = torch.ones([mask.shape[0], self.num_of_regions], dtype=torch.bool).cuda()
-            img_attn_mask = torch.ones([mask.shape[0], self.num_of_regions], dtype=torch.bool).cuda()
+            img_mask = torch.ones([mask.shape[0], self.num_of_regions]).type_as(mask)
+            img_attn_mask = torch.ones([mask.shape[0], self.num_of_regions]).type_as(mask)
             mask = torch.cat((mask, img_mask), dim=1)
             attn_mask = torch.cat((attn_mask, img_attn_mask), dim=1)
             # detection_classes

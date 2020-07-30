@@ -1,10 +1,3 @@
-# Copyright (c) 2019-present, Facebook, Inc.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-#
-
 import os
 import sys
 import math
@@ -64,8 +57,11 @@ class Trainer(object):
         if params.multi_gpu and params.amp == -1:
             logger.info("Using nn.parallel.DistributedDataParallel ...")
             for name in self.MODEL_NAMES:
-                #logger.info("name: ", name)
-                setattr(self, name, nn.parallel.DistributedDataParallel(getattr(self, name), find_unused_parameters=True, device_ids=[params.local_rank], output_device=params.local_rank, broadcast_buffers=True))
+                # logger.info("name: ", name)
+                setattr(self, name,
+                        nn.parallel.DistributedDataParallel(getattr(self, name), find_unused_parameters=True,
+                                                            device_ids=[params.local_rank],
+                                                            output_device=params.local_rank, broadcast_buffers=True))
         logger.info("Using nn.parallel.DistributedDataParallel ...")
 
         # set optimizers
@@ -77,7 +73,8 @@ class Trainer(object):
             if params.multi_gpu:
                 logger.info("Using apex.parallel.DistributedDataParallel ...")
                 for name in self.MODEL_NAMES:
-                    setattr(self, name, apex.parallel.DistributedDataParallel(getattr(self, name), delay_allreduce=True))
+                    setattr(self, name,
+                            apex.parallel.DistributedDataParallel(getattr(self, name), delay_allreduce=True))
 
         # stopping criterion used for early stopping
         if params.stopping_criterion != '':
@@ -101,7 +98,7 @@ class Trainer(object):
         counts = np.array(list(self.data['dico'].counts.values()))
         params.mask_scores = np.maximum(counts, 1) ** -params.sample_alpha
         params.mask_scores[params.pad_index] = 0  # do not predict <PAD> index
-        params.mask_scores[counts == 0] = 0       # do not predict special tokens
+        params.mask_scores[counts == 0] = 0  # do not predict special tokens
 
         # validation metrics
         self.metrics = []
@@ -116,23 +113,43 @@ class Trainer(object):
         self.n_iter = 0
         self.n_total_iter = 0
         self.n_sentences = 0
-        self.stats = OrderedDict(
-            [('processed_s', 0), ('processed_w', 0)] +
-            [('CLM-%s' % l, []) for l in params.langs] +
-            [('CLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
-            [('CLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
-            [('MLM-%s' % l, []) for l in params.langs] +
-            [('MLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
-            [('MLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
-            [('VLM-%s' % l, []) for l in params.langs] +
-            [('VLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
-            [('VLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
-            [('PC-%s-%s' % (l1, l2), []) for l1, l2 in params.pc_steps] +
-            [('AE-%s' % lang, []) for lang in params.ae_steps] +
-            [('MT-%s-%s' % (l1, l2), []) for l1, l2 in params.mt_steps] +
-            [('MMT-%s-%s' % (l1, l2), []) for l1, l2 in params.mmt_steps] +
-            [('BT-%s-%s-%s' % (l1, l2, l3), []) for l1, l2, l3 in params.bt_steps]
-        )
+        if 'para' in data:
+
+            self.stats = OrderedDict(
+                [('processed_s', 0), ('processed_w', 0)] +
+                [('CLM-%s' % l, []) for l in params.langs] +
+                #[('CLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
+                #[('CLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
+                [('MLM-%s' % l, []) for l in params.langs] +
+                #[('MLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
+                #[('MLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
+                [('VLM-%s' % l, []) for l in params.langs] +
+                #[('VLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
+                #[('VLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
+                [('PC-%s-%s' % (l1, l2), []) for l1, l2 in params.pc_steps] +
+                [('AE-%s' % lang, []) for lang in params.ae_steps] +
+                [('MT-%s-%s' % (l1, l2), []) for l1, l2 in params.mt_steps] +
+                [('MMT-%s-%s' % (l1, l2), []) for l1, l2 in params.mmt_steps] +
+                [('BT-%s-%s-%s' % (l1, l2, l3), []) for l1, l2, l3 in params.bt_steps]
+            )
+        else:
+            self.stats = OrderedDict(
+                [('processed_s', 0), ('processed_w', 0)] +
+                [('CLM-%s' % l, []) for l in params.langs] +
+                [('CLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
+                [('CLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
+                [('MLM-%s' % l, []) for l in params.langs] +
+                [('MLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
+                [('MLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
+                [('VLM-%s' % l, []) for l in params.langs] +
+                [('VLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
+                [('VLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
+                [('PC-%s-%s' % (l1, l2), []) for l1, l2 in params.pc_steps] +
+                [('AE-%s' % lang, []) for lang in params.ae_steps] +
+                [('MT-%s-%s' % (l1, l2), []) for l1, l2 in params.mt_steps] +
+                [('MMT-%s-%s' % (l1, l2), []) for l1, l2 in params.mmt_steps] +
+                [('BT-%s-%s-%s' % (l1, l2, l3), []) for l1, l2, l3 in params.bt_steps]
+            )
         self.last_time = time.time()
 
         # reload potential checkpoints
@@ -296,7 +313,8 @@ class Trainer(object):
         """
         Create a new iterator for a dataset.
         """
-        logger.info("Creating new training data iterator (%s) ..." % ','.join([str(x) for x in [iter_name, lang1, lang2] if x is not None]))
+        logger.info("Creating new training data iterator (%s) ..." % ','.join(
+            [str(x) for x in [iter_name, lang1, lang2] if x is not None]))
         assert stream or not self.params.use_memory or not self.params.mem_query_batchnorm
         if lang2 is None:
             if stream:
@@ -331,13 +349,14 @@ class Trainer(object):
         """
         Create a new iterator for a dataset.
         """
-        logger.info("Creating new training data iterator (%s) ..." % ','.join([str(x) for x in [iter_name, lang1, lang2] if x is not None]))
+        logger.info("Creating new training data iterator (%s) ..." % ','.join(
+            [str(x) for x in [iter_name, lang1, lang2] if x is not None]))
         assert stream or not self.params.use_memory or not self.params.mem_query_batchnorm
         if lang2 is None:
             if stream:
                 iterator = self.data['mono_stream'][lang1]['train'].get_iterator(shuffle=True)
             else:
-                iterator = self.data['mono'][lang1]['train'].get_iterator(
+                iterator = self.data['vmono'][lang1]['train'].get_iterator(
                     shuffle=True,
                     group_by_size=self.params.group_by_size,
                     n_sentences=-1,
@@ -376,13 +395,13 @@ class Trainer(object):
 
     def get_batch_vpara(self, iter_name,
 
-                  lang1, lang2=None, stream=False):
+                        lang1, lang2=None, stream=False):
         """
         Return a batch of sentences from a dataset.
         """
         assert lang1 in self.params.langs
         assert lang2 is None or lang2 in self.params.langs
-        assert stream is False or lang2 is None
+        # assert stream is False or lang2 is None
         iterator = self.iterators.get((iter_name, lang1, lang2), None)
         if iterator is None:
             iterator = self.get_iterator_vpara(iter_name, lang1, lang2, stream)
@@ -489,10 +508,9 @@ class Trainer(object):
 
     def mask_out_image(self, img_dict, masked_labels=None):
 
-
         params = self.params
 
-        x = torch.from_numpy(get_image_properties(img_dict, "detection_classes").astype(dtype = 'float32'))
+        x = torch.from_numpy(get_image_properties(img_dict, "detection_classes").astype(dtype='float32'))
         # bor_tensor = torch.from_numpy(np.array([self.params.bor_index])).long().unsqueeze(0).repeat(x.shape[0],1)
         # eor_tensor = torch.from_numpy(np.array([self.params.eor_index])).long().unsqueeze(0).repeat(x.shape[0],1)
         x = x.t()
@@ -502,14 +520,14 @@ class Trainer(object):
             pred_mask = np.random.rand(slen, bs) <= params.word_pred
             pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
             # Reset  part
-            for i,token_ids in enumerate(masked_labels):
+            for i, token_ids in enumerate(masked_labels):
                 for token_id in token_ids:
                     if "-" in token_id:
                         continue
                     token_id = int(token_id)
                     # remove mask specific tokens
                     if token_id in x[:, i]:
-                        pred_mask[:,i][x[:,i] == token_id] = 0
+                        pred_mask[:, i][x[:, i] == token_id] = 0
         # define target words to predict
         elif params.sample_alpha == 0:
             pred_mask = np.random.rand(slen, bs) <= params.word_pred
@@ -524,11 +542,11 @@ class Trainer(object):
 
         # do not predict padding
         # pad index might be class number in our case
-        #pred_mask[x == params.pad_index] = 0
+        # pred_mask[x == params.pad_index] = 0
         # pred_mask[x == params.bor_index] = 0
         # pred_mask[x == params.eor_index] = 0
 
-        #pred_mask[0] = 0  # TODO: remove
+        # pred_mask[0] = 0  # TODO: remove
 
         # generate possible targets / update x input
         _x_real = x[pred_mask]
@@ -536,7 +554,7 @@ class Trainer(object):
         _x_mask = _x_real.clone().fill_(params.mask_index)
         try:
             probs = torch.multinomial(params.pred_probs, len(_x_real), replacement=True)
-            _x = _x_mask * (probs == 0).long()+ _x_real * (probs == 1).long() + _x_rand * (probs == 2).long()
+            _x = _x_mask * (probs == 0).long() + _x_real * (probs == 1).long() + _x_rand * (probs == 2).long()
             x = x.masked_scatter(pred_mask, _x)
         except Exception as e:
             print(e)
@@ -545,7 +563,6 @@ class Trainer(object):
         assert x.size() == (slen, bs)
         assert pred_mask.size() == (slen, bs)
         return x, _x_real, pred_mask
-
 
     def mask_out(self, x, lengths, masked_tokens=None, langs=None):
         """
@@ -560,14 +577,14 @@ class Trainer(object):
             pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
             # Reset english part
             pred_mask[langs == params.lang2id["en"]] = 0
-            for i,token_ids in enumerate(masked_tokens):
+            for i, token_ids in enumerate(masked_tokens):
                 masked_cnt = 0
                 for token_id in token_ids:
                     # mask specific tokens
                     if token_id in x[:, i]:
                         if random.random() < 0.5:
-                            pred_mask[:,i][x[:,i] == token_id] = 1
-                            masked_cnt+=1
+                            pred_mask[:, i][x[:, i] == token_id] = 1
+                            masked_cnt += 1
                 if masked_cnt == 0:
                     pred_mask_recreated = np.random.rand(slen) <= params.word_pred
                     pred_mask_recreated = torch.from_numpy(pred_mask_recreated.astype(np.bool))
@@ -583,7 +600,6 @@ class Trainer(object):
             pred_mask = torch.zeros(slen * bs, dtype=torch.bool)
             pred_mask[tgt_ids] = 1
             pred_mask = pred_mask.view(slen, bs)
-
 
         # do not predict padding
         pred_mask[x == params.pad_index] = 0
@@ -615,17 +631,19 @@ class Trainer(object):
         lang2_id = params.lang2id[lang2] if lang2 is not None else None
 
         if lang2 is None:
-            x, lengths = self.get_batch(name, lang1, stream=True)
+            x, lengths = self.get_batch(name, lang1, stream=params.bptt > 0)
             positions = None
             langs = x.clone().fill_(lang1_id) if params.n_langs > 1 else None
         elif lang1 == lang2:
             (x1, len1) = self.get_batch(name, lang1)
             (x2, len2) = (x1, len1)
             (x1, len1) = self.add_noise(x1, len1)
-            x, lengths, positions, langs = concat_batches(x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index, params.eos_index, reset_positions=False)
+            x, lengths, positions, langs = concat_batches(x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index,
+                                                          params.eos_index, reset_positions=False)
         else:
             (x1, len1), (x2, len2) = self.get_batch(name, lang1, lang2)
-            x, lengths, positions, langs = concat_batches(x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index, params.eos_index, reset_positions=True)
+            x, lengths, positions, langs = concat_batches(x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index,
+                                                          params.eos_index, reset_positions=True)
 
         return x, lengths, positions, langs, (None, None) if lang2 is None else (len1, len2)
 
@@ -637,13 +655,24 @@ class Trainer(object):
         lang1_id = params.lang2id[lang1]
         lang2_id = params.lang2id[lang2] if lang2 is not None else None
 
-        (masked_object_ids), (masked_tokens), (img_dict), (img1, len_img1), (x1, len1), (x2, len2) = self.get_batch_vpara(name, lang1, lang2)
-        # menekse: img1 and leng_im1 only used for getting length of the image portion
-        x, lengths, positions, langs, image_langs = concat_batches_triple(x1, len1, lang1_id, x2, len2, lang2_id, img1,
-                                                             len_img1, params.lang2id["img"], params.pad_index,
-                                                                    params.eos_index, reset_positions=True)
+        if lang2 is not None:
 
-        return x, lengths, positions, langs, image_langs, img_dict, masked_object_ids, masked_tokens,  (None, None)
+            (masked_object_ids), (masked_tokens), (img_dict), (img1, len_img1), (x1, len1), (
+            x2, len2) = self.get_batch_vpara(name, lang1, lang2)
+            # menekse: img1 and leng_im1 only used for getting length of the image portion
+            x, lengths, positions, langs, image_langs = concat_batches_triple(x1, len1, lang1_id, x2, len2, lang2_id, img1,
+                                                                              len_img1, params.lang2id["img"],
+                                                                              params.pad_index,
+                                                                              params.eos_index, reset_positions=True)
+        else:
+            (x, len1), (img, len_img), (img_dict), (masked_tokens), (masked_object_ids) = self.get_batch_vpara(name,lang1,lang2)
+            image_langs = img.new(len_img.max().item(), len1.size(0)).fill_(params.lang2id["img"])
+            langs = x.clone().fill_(lang1_id)
+            positions = None
+            lengths = len1
+
+        return x, lengths, positions, langs, image_langs, img_dict, masked_object_ids, masked_tokens, (None, None)
+
 
     def save_checkpoint(self, name, include_optimizers=True):
         """
@@ -748,8 +777,9 @@ class Trainer(object):
         End the epoch.
         """
         # stop if the stopping criterion has not improved after a certain number of epochs
-        if self.stopping_criterion is not None and (self.params.is_master or not self.stopping_criterion[0].endswith('_mt_bleu')
-                                                    or not self.stopping_criterion[0].endswith('_mmt_bleu')):
+        if self.stopping_criterion is not None and (
+                self.params.is_master or not self.stopping_criterion[0].endswith('_mt_bleu')
+                or not self.stopping_criterion[0].endswith('_mmt_bleu')):
             metric, biggest = self.stopping_criterion
             assert metric in scores, metric
             factor = 1 if biggest else -1
@@ -877,10 +907,9 @@ class Trainer(object):
         loss = lambda_coeff * loss
 
         if iter % 100 == 0:
-
             self.writer.add_scalar('loss',
-                              loss.data.tolist(),
-                              iter)
+                                   loss.data.tolist(),
+                                   iter)
         # optimize
         self.optimize(loss)
 
@@ -889,8 +918,7 @@ class Trainer(object):
         self.stats['processed_s'] += lengths.size(0)
         self.stats['processed_w'] += pred_mask.sum().item()
 
-
-    def vlm_step(self, lang1, lang2,lambda_coeff, iter): # (32,36,8,8,1586),(32,36,4)
+    def vlm_step(self, lang1, lang2, lambda_coeff, iter):  # (32,36,8,8,1586),(32,36,4)
         """
         Masked word prediction step.
         MLM objective is lang2 is None, TLM objective otherwise.
@@ -904,25 +932,27 @@ class Trainer(object):
         model.train()
 
         # generate batch / select words to predict
-        x, lengths, positions, langs, image_langs, img_dict, masked_object_ids, masked_tokens, _ = self.generate_batch_vpara(lang1, lang2, 'pred_object')
+        x, lengths, positions, langs, image_langs, img_dict, masked_object_ids, masked_tokens, _ = self.generate_batch_vpara(
+            lang1, lang2, 'pred_object')
         x, lengths, positions, langs, _ = self.round_batch(x, lengths, positions, langs)
 
         x, y, pred_mask = self.mask_out(x, lengths, masked_tokens, langs)
         img_x, img_y, img_pred_mask = self.mask_out_image(img_dict, masked_object_ids)
 
-        pred_mask = torch.cat((pred_mask,img_pred_mask))
+        pred_mask = torch.cat((pred_mask, img_pred_mask))
 
         # cuda
         x, y, pred_mask, lengths, positions, langs = to_cuda(x, y, pred_mask, lengths, positions, langs)
-        img_x, img_y, img_pred_mask,image_langs  = to_cuda(img_x, img_y, img_pred_mask,image_langs)
+        img_x, img_y, img_pred_mask, image_langs = to_cuda(img_x, img_y, img_pred_mask, image_langs)
 
         # forward / loss
-        tensor = model('fwd', x=x, lengths=lengths, positions=positions, langs=langs, image_langs=image_langs, causal=False,
-                       img_dict = img_dict)
+        tensor = model('fwd', x=x, lengths=lengths, positions=positions, langs=langs, image_langs=image_langs,
+                       causal=False,
+                       img_dict=img_dict)
         img_tensor_length = params.num_of_regions
-        sent_tensor = tensor[:-img_tensor_length:,:]
-        sent_pred_mask = pred_mask[:-img_tensor_length:,:]
-        img_tensor = tensor[:img_tensor_length:,:]
+        sent_tensor = tensor[:-img_tensor_length:, :]
+        sent_pred_mask = pred_mask[:-img_tensor_length:, :]
+        img_tensor = tensor[:img_tensor_length:, :]
 
         _, text_loss = model('predict', tensor=sent_tensor, pred_mask=sent_pred_mask, y=y, get_scores=False)
         _, img_loss = model('predict_img_class', tensor=img_tensor, pred_mask=img_pred_mask, y=img_y, get_scores=False)
@@ -932,17 +962,16 @@ class Trainer(object):
         loss = lambda_coeff * loss
 
         if iter % 100 == 0:
-
             self.writer.add_scalar('img_loss',
-                              img_loss.data.tolist(),
-                              iter)
+                                   img_loss.data.tolist(),
+                                   iter)
             self.writer.add_scalar('text_loss',
-                              text_loss.data.tolist(),
-                              iter)
+                                   text_loss.data.tolist(),
+                                   iter)
 
             self.writer.add_scalar('total_loss',
-                              loss.data.tolist(),
-                              iter)
+                                   loss.data.tolist(),
+                                   iter)
 
         # optimize
         self.optimize(loss)
@@ -982,7 +1011,8 @@ class Trainer(object):
         x2, len2 = x2[:, idx], len2[idx]
 
         # generate batch / cuda
-        x, lengths, positions, langs = concat_batches(x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index, params.eos_index, reset_positions=False)
+        x, lengths, positions, langs = concat_batches(x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index,
+                                                      params.eos_index, reset_positions=False)
         x, lengths, positions, langs, new_idx = self.round_batch(x, lengths, positions, langs)
         if new_idx is not None:
             y = y[new_idx]
@@ -1011,7 +1041,6 @@ class Trainer(object):
 class SingleTrainer(Trainer):
 
     def __init__(self, model, data, params):
-
         self.MODEL_NAMES = ['model']
 
         # model / data / params
@@ -1114,7 +1143,7 @@ class EncDecTrainer(Trainer):
 
         # cuda
         x1, len1, langs1, x2, len2, langs2, y, img1, img_len, img_langs = to_cuda(x1, len1, langs1, x2, len2, langs2, y,
-                                                                       img1, img_len, img_langs)
+                                                                                  img1, img_len, img_langs)
 
         # encode source sentence
         enc1 = self.encoder('fwd', x=x1, lengths=len1, langs=langs1, image_langs=img_langs, img_dict=img_dict,
@@ -1122,7 +1151,7 @@ class EncDecTrainer(Trainer):
         enc1 = enc1.transpose(0, 1)
 
         # decode target sentence
-        dec2 = self.decoder('fwd', x=x2, lengths=len2, langs=langs2, causal=True, src_enc=enc1, src_len=len1+img_len)
+        dec2 = self.decoder('fwd', x=x2, lengths=len2, langs=langs2, causal=True, src_enc=enc1, src_len=len1 + img_len)
 
         # loss
         _, loss = self.decoder('predict', tensor=dec2, pred_mask=pred_mask, y=y, get_scores=False)
@@ -1161,7 +1190,6 @@ class EncDecTrainer(Trainer):
 
         # generate a translation
         with torch.no_grad():
-
             # evaluation mode
             self.encoder.eval()
             self.decoder.eval()

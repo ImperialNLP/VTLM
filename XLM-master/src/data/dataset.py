@@ -639,3 +639,226 @@ class ParallelDatasetWithRegions(Dataset):
 
         return img_data, good_indices
 
+class DatasetWithRegions(object):
+
+    def __init__(self, sent, pos, image_names,masked_tokens, masked_object_labels, params):
+
+        self.eos_index = params.eos_index
+        self.pad_index = params.pad_index
+        self.batch_size = params.batch_size
+        self.tokens_per_batch = params.tokens_per_batch
+        self.max_batch_size = params.max_batch_size
+
+        self.sent = sent
+        self.pos = pos
+        self.image_names = np.array(image_names)
+        self.region_features_path = params.region_feats_path
+        self.lengths = self.pos[:, 1] - self.pos[:, 0]
+        if masked_tokens is not None and masked_object_labels is not None:
+            self.masked_tokens = np.array(masked_tokens)
+            self.masked_object_labels = np.array(masked_object_labels)
+        else:
+            self.masked_tokens = None
+            self.masked_object_labels = None
+        # check number of sentences
+        assert len(self.pos) == (self.sent == self.eos_index).sum()
+
+        # # remove empty sentences
+        self.remove_empty_sentences()
+        # sanity checks
+        self.check()
+
+    def __len__(self):
+        """
+        Number of sentences in the dataset.
+        """
+        return len(self.pos)
+
+    def check(self):
+        """
+        Sanity checks.
+        """
+        eos = self.eos_index
+        assert len(self.pos) == (self.sent[self.pos[:, 1]] == eos).sum()  # check sentences indices
+        # assert self.lengths.min() > 0
+        # check empty sentences
+    def remove_empty_sentences(self):
+        """
+        Remove empty sentences.
+        """
+        init_size = len(self.pos)
+        indices = np.arange(len(self.pos))
+        indices = indices[self.lengths[indices] > 0]
+
+        self.pos = self.pos[indices]
+        self.lengths = self.pos[:, 1] - self.pos[:, 0]
+        self.image_names = self.image_names[indices]
+
+        logger.info("Removed %i empty sentences." % (init_size - len(indices)))
+        self.check()
+    def batch_sentences(self, sentences):
+        """
+        Take as input a list of n sentences (torch.LongTensor vectors) and return
+        a tensor of size (slen, n) where slen is the length of the longest
+        sentence, and a vector lengths containing the length of each sentence.
+        """
+        # sentences = sorted(sentences, key=lambda x: len(x), reverse=True)
+        lengths = torch.LongTensor([len(s) + 2 for s in sentences])
+        sent = torch.LongTensor(lengths.max().item(), lengths.size(0)).fill_(self.pad_index)
+
+        sent[0] = self.eos_index
+        for i, s in enumerate(sentences):
+            if lengths[i] > 2:  # if sentence not empty
+                sent[1:lengths[i] - 1, i].copy_(torch.from_numpy(s.astype(np.int64)))
+            sent[lengths[i] - 1, i] = self.eos_index
+
+        return sent, lengths
+
+    def remove_long_sentences(self, max_len):
+        """
+        Remove sentences exceeding a certain length.
+        """
+        assert max_len >= 0
+        if max_len == 0:
+            return
+        init_size = len(self.pos)
+        indices = np.arange(len(self.pos))
+        indices = indices[self.lengths[indices] <= max_len]
+        self.pos = self.pos[indices]
+        self.lengths = self.pos[:, 1] - self.pos[:, 0]
+        self.image_names = self.image_names[indices]
+
+        logger.info("Removed %i too long sentences." % (init_size - len(indices)))
+        self.check()
+
+    def select_data(self, a, b):
+        """
+        Only select a subset of the dataset.
+        """
+        assert 0 <= a < b <= len(self.pos)
+        logger.info("Selecting sentences from %i to %i ..." % (a, b))
+
+        # sub-select
+        self.pos = self.pos[a:b]
+
+        self.lengths = self.pos[:, 1] - self.pos[:, 0]
+        self.image_feats = self.image_feats[a:b]
+
+        # re-index
+        min_pos1 = self.pos.min()
+        max_pos1 = self.pos.max()
+
+        self.pos -= min_pos1
+        self.sent = self.sent[min_pos1:max_pos1 + 1]
+
+        # sanity checks
+        self.check()
+
+    def get_batches_iterator(self, batches, return_indices):
+        """
+        Return a sentences iterator, given the associated sentence batches.
+        """
+        assert type(return_indices) is bool
+        masked_tokens, masked_object_id = None, None
+        for sentence_ids in batches:
+            if 0 < self.max_batch_size < len(sentence_ids):
+                np.random.shuffle(sentence_ids)
+                sentence_ids = sentence_ids[:self.max_batch_size]
+
+            image_name_with_indices = zip(sentence_ids, self.image_names[sentence_ids])
+            image_features, good_indices = self.load_images(self.region_features_path, image_name_with_indices)
+            image_scores = self.batch_images(image_features, feat_type="detection_scores")
+            img_all_dict = image_features
+            # img_all_dict = self.image_feats[sentence_ids]
+            # print("length of image dict: ", len(img_all_dict))
+            pos = self.pos[good_indices]
+            sent = self.batch_sentences([self.sent[a:b] for a, b in pos])
+            if self.masked_tokens is not None and self.masked_object_labels is not None:
+                masked_tokens = self.masked_tokens[good_indices]
+                masked_object_id = self.masked_object_labels[good_indices]
+            yield (sent, image_scores, img_all_dict, masked_tokens, masked_object_id,
+                   sentence_ids) if return_indices else (sent,
+                                                         image_scores,img_all_dict,masked_tokens,masked_object_id)
+
+    def get_iterator(self, shuffle, group_by_size=False, n_sentences=-1, return_indices=False):
+        """
+        Return a sentences iterator.
+        """
+        n_sentences = len(self.pos) if n_sentences == -1 else n_sentences
+        assert 0 < n_sentences <= len(self.pos)
+        assert type(shuffle) is bool and type(group_by_size) is bool
+
+        # sentence lengths
+        lengths = self.lengths + 2
+
+        # select sentences to iterate over
+        if shuffle:
+            indices = np.random.permutation(len(self.pos))[:n_sentences]
+        else:
+            indices = np.arange(n_sentences)
+
+        # group sentences by lengths
+        if group_by_size:
+            indices = indices[np.argsort(lengths[indices], kind='mergesort')]
+
+        # create batches - either have a fixed number of sentences, or a similar number of tokens
+        if self.tokens_per_batch == -1:
+            batches = np.array_split(indices, math.ceil(len(indices) * 1. / self.batch_size))
+        else:
+            batch_ids = np.cumsum(lengths[indices]) // self.tokens_per_batch
+            _, bounds = np.unique(batch_ids, return_index=True)
+            batches = [indices[bounds[i]:bounds[i + 1]] for i in range(len(bounds) - 1)]
+            if bounds[-1] < len(indices):
+                batches.append(indices[bounds[-1]:])
+
+        # optionally shuffle batches
+        if shuffle:
+            np.random.shuffle(batches)
+
+        # sanity checks
+        assert n_sentences == sum([len(x) for x in batches])
+        assert lengths[indices].sum() == sum([lengths[x].sum() for x in batches])
+        # assert set.union(*[set(x.tolist()) for x in batches]) == set(range(n_sentences))  # slow
+
+        # return the iterator
+        return self.get_batches_iterator(batches, return_indices)
+    def batch_images(self, images, feat_type):
+        """
+        Take as input a list of n sentences (torch.LongTensor vectors) and return
+        a tensor of size (slen, n) where slen is the length of the longest
+        sentence, and a vector lengths containing the length of each sentence.
+        """
+        # sentences = sorted(sentences, key=lambda x: len(x), reverse=True)
+        lengths = torch.LongTensor([len(s[feat_type]) for s in images])
+        imgs = torch.LongTensor(lengths.max().item(), lengths.size(0)).fill_(self.pad_index)
+        # imgs[0] = self.bor_index
+        for i, img in enumerate(images):
+            feat = img[feat_type]
+            try:
+                imgs[0:lengths[i], i].copy_(torch.from_numpy(feat.astype(np.int64)))
+                # imgs[lengths[i] - 1, i] = self.eor_index
+            except Exception as e:
+                #print(feat.shape)
+                #print(lengths[i], len(lengths[i]))
+                print(e)
+        return imgs, lengths
+    def load_images(self, region_features_path, image_name_with_indices):
+
+        img_data = []
+        good_indices = []
+        for ind, image_name in image_name_with_indices:
+            try:
+                f_name = os.path.join(region_features_path, image_name)
+                with open(f_name, "rb") as f:
+                    x = pickle.load(f)
+                    if len(x) != 0 and len(x["detection_scores"]) == 36:
+                        img_data.append(x)
+                        good_indices.append(ind)
+                    else:
+                        with open("empty_files.txt", "a") as f:
+                            f.write(f_name + "\n")
+                            print('File is empty')
+            except:
+                    pass
+
+        return img_data, good_indices

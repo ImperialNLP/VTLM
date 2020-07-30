@@ -5,12 +5,13 @@
 # LICENSE file in the root directory of this source tree.
 #
 
-from logging import getLogger
 import os
+from logging import getLogger
+
 import numpy as np
 import torch
 
-from .dataset import StreamDataset, Dataset, ParallelDataset,ParallelDatasetWithRegions
+from .dataset import StreamDataset, Dataset, ParallelDataset, ParallelDatasetWithRegions, DatasetWithRegions
 from .dictionary import BOS_WORD, EOS_WORD, PAD_WORD, UNK_WORD, MASK_WORD
 
 logger = getLogger()
@@ -163,6 +164,79 @@ def load_mono_data(params, data):
                 data['mono'][lang][splt] = dataset
 
             logger.info("")
+
+    logger.info("")
+def load_vmono_data(params, data):
+    """
+    Load monolingual data along with image features.
+    """
+    data['vmono'] = {}
+
+    for lang in params.mono_dataset.keys():
+
+        logger.info('============ Monolingual data (%s)' % lang)
+
+        assert lang in params.langs and lang not in data['vmono']
+        data['vmono'][lang] = {}
+
+        for splt in ['train', 'valid', 'test']:
+
+            # no need to load training data for evaluation
+            if splt == 'train' and params.eval_only:
+                continue
+
+            # load data / update dictionary parameters / update data
+            mono_data = load_binarized(params.mono_dataset[lang][splt], params)
+            image_names = []
+            existing_indices = []
+            with open(os.path.join(params.image_names,"image_names."+splt),"r") as img_names:
+                for i,line in enumerate(img_names):
+                    line = line.strip()
+                    line = line + ".pkl"
+                    image_names.append(line)
+                    existing_indices.append(i)
+
+            masked_tokens = None
+            masked_object_labels = None
+            if params.mask_file_dir:
+                masked_tokens = []
+                masked_object_labels = []
+                with open(os.path.join(params.mask_file_dir, "mask." + splt), "r") as masked_file:
+                    for info in masked_file.readlines():
+                        info = info.strip().split("\t")
+                        word_indices = []
+                        for w in info[2].split(","):
+                            for word in w.split():
+                                if word in data["dico"].word2id:
+                                    word_indices.append(data["dico"].word2id[word])
+                        masked_tokens.append(word_indices)
+                        masked_object_labels.append(info[1].split(","))
+
+            set_dico_parameters(params, data, mono_data['dico'])
+            existing_indices = np.array(existing_indices)
+            logger.info(f'Found {existing_indices.size} image features')
+
+            # for denoising auto-encoding and online back-translation, we need a non-stream (batched) dataset
+
+            # create batched dataset
+            dataset = DatasetWithRegions(mono_data['sentences'], mono_data['positions'],image_names,masked_tokens,
+                                         masked_object_labels, params)
+
+            # remove empty and too long sentences
+            if splt == 'train':
+                dataset.remove_empty_sentences()
+                dataset.remove_long_sentences(params.max_len)
+
+            # if there are several processes on the same machine, we can split the dataset
+            if splt == 'train' and params.n_gpu_per_node > 1 and params.split_data:
+                n_sent = len(dataset) // params.n_gpu_per_node
+                a = n_sent * params.local_rank
+                b = n_sent * params.local_rank + n_sent
+                dataset.select_data(a, b)
+
+            data['vmono'][lang][splt] = dataset
+
+        logger.info("")
 
     logger.info("")
 
@@ -401,6 +475,12 @@ def check_data_params(params):
             for splt in ['train', 'valid', 'test']
         } for lang in params.langs if lang in required_mono
     }
+    params.vmono_dataset = {
+        lang: {
+            splt: os.path.join(params.data_path, '%s.%s.pth' % (splt, lang))
+            for splt in ['train', 'valid', 'test']
+        } for lang in params.langs if lang in required_mono
+    }
     for paths in params.mono_dataset.values():
         for p in paths.values():
             if not os.path.isfile(p):
@@ -451,23 +531,42 @@ def load_data(params):
     data = {}
 
     # monolingual datasets
-    load_mono_data(params, data)
+    if not params.only_vlm:
+
+        load_mono_data(params, data)
 
     # parallel datasets
-    load_para_data(params, data)
+    if not params.only_vlm:
+        load_para_data(params, data)
+
+
     if params.only_vlm or params.mmt_steps:
-        load_vpara_data(params,data)
+        if "-" in params.mlm_steps:
+
+            load_vpara_data(params,data)
+        if "-" not in params.mlm_steps or ("-" in params.mlm_steps and len(params.mlm_steps.split(",")) >= 2):
+
+            load_vmono_data(params,data)
+            print("that should work")
 
     # monolingual data summary
-    logger.info('============ Data summary')
-    for lang, v in data['mono_stream'].items():
-        for data_set in v.keys():
-            logger.info('{: <18} - {: >5} - {: >12}:{: >10}'.format('Monolingual data', data_set, lang, len(v[data_set])))
+    if "mono_stream" in data:
 
-    # parallel data summary
-    for (src, tgt), v in data['para'].items():
-        for data_set in v.keys():
-            logger.info('{: <18} - {: >5} - {: >12}:{: >10}'.format('Parallel data', data_set, '%s-%s' % (src, tgt), len(v[data_set])))
+        logger.info('============ Data summary')
+        for lang, v in data['mono_stream'].items():
+            for data_set in v.keys():
+                logger.info('{: <18} - {: >5} - {: >12}:{: >10}'.format('Monolingual data', data_set, lang, len(v[data_set])))
+
+    if "para" in data:
+
+        # parallel data summary
+        for (src, tgt), v in data['para'].items():
+            for data_set in v.keys():
+                logger.info('{: <18} - {: >5} - {: >12}:{: >10}'.format('Parallel data', data_set, '%s-%s' % (src, tgt), len(v[data_set])))
+    if "vmono" in data:
+        for lang, v in data['vmono'].items():
+            for data_set in v.keys():
+                logger.info('{: <18} - {: >5} - {: >12}:{: >10}'.format('Monolingual data with regions', data_set, lang, len(v[data_set])))
 
     logger.info("")
     return data
