@@ -114,25 +114,6 @@ class Trainer(object):
         self.n_total_iter = 0
         self.n_sentences = 0
         if 'para' in data:
-
-            self.stats = OrderedDict(
-                [('processed_s', 0), ('processed_w', 0)] +
-                [('CLM-%s' % l, []) for l in params.langs] +
-                #[('CLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
-                #[('CLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
-                [('MLM-%s' % l, []) for l in params.langs] +
-                #[('MLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
-                #[('MLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
-                [('VLM-%s' % l, []) for l in params.langs] +
-                #[('VLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
-                #[('VLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
-                [('PC-%s-%s' % (l1, l2), []) for l1, l2 in params.pc_steps] +
-                [('AE-%s' % lang, []) for lang in params.ae_steps] +
-                [('MT-%s-%s' % (l1, l2), []) for l1, l2 in params.mt_steps] +
-                [('MMT-%s-%s' % (l1, l2), []) for l1, l2 in params.mmt_steps] +
-                [('BT-%s-%s-%s' % (l1, l2, l3), []) for l1, l2, l3 in params.bt_steps]
-            )
-        else:
             self.stats = OrderedDict(
                 [('processed_s', 0), ('processed_w', 0)] +
                 [('CLM-%s' % l, []) for l in params.langs] +
@@ -144,6 +125,18 @@ class Trainer(object):
                 [('VLM-%s' % l, []) for l in params.langs] +
                 [('VLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
                 [('VLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
+                [('PC-%s-%s' % (l1, l2), []) for l1, l2 in params.pc_steps] +
+                [('AE-%s' % lang, []) for lang in params.ae_steps] +
+                [('MT-%s-%s' % (l1, l2), []) for l1, l2 in params.mt_steps] +
+                [('MMT-%s-%s' % (l1, l2), []) for l1, l2 in params.mmt_steps] +
+                [('BT-%s-%s-%s' % (l1, l2, l3), []) for l1, l2, l3 in params.bt_steps]
+            )
+        else:
+            self.stats = OrderedDict(
+                [('processed_s', 0), ('processed_w', 0)] +
+                [('CLM-%s' % l, []) for l in params.langs] +
+                [('MLM-%s' % l, []) for l in params.langs] +
+                [('VLM-%s' % l, []) for l in params.langs] +
                 [('PC-%s-%s' % (l1, l2), []) for l1, l2 in params.pc_steps] +
                 [('AE-%s' % lang, []) for lang in params.ae_steps] +
                 [('MT-%s-%s' % (l1, l2), []) for l1, l2 in params.mt_steps] +
