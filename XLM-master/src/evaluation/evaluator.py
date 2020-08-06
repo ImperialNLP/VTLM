@@ -99,6 +99,12 @@ class Evaluator(object):
             subprocess.Popen('mkdir -p %s' % params.hyp_path, shell=True).wait()
             self.create_reference_files()
 
+    def print_batch(self, x):
+        slen, bs = x.shape
+        xc = x.cpu().numpy()
+        for i in range(bs):
+            print(' '.join([self.dico.id2word[j] for j in xc[:, i]]))
+
     def get_iterator(self, data_set, lang1, lang2=None, stream=False):
         """
         Create a new iterator for a dataset.
@@ -359,6 +365,7 @@ class Evaluator(object):
         model.eval()
         model = model.module if params.multi_gpu else model
 
+        # Deterministic masking
         rng = np.random.RandomState(0)
 
         lang1_id = params.lang2id[lang1]
