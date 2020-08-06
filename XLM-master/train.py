@@ -297,6 +297,9 @@ def main(params):
                     # trainer.mlm_step(lang1, lang2, params.lambda_mlm)
                     if lang1 and lang2:
                         trainer.vlm_step(lang1, lang2, params.lambda_clm, iter)
+                    else:
+                        trainer.vlm_step(lang1, None, params.lambda_clm, iter)
+
             else:
                 # CLM steps
                 # for lang1, lang2 in shuf_order(params.clm_steps, params):
