@@ -19,8 +19,7 @@ from src.trainer import SingleTrainer, EncDecTrainer
 from src.evaluation.evaluator import SingleEvaluator, EncDecEvaluator
 from torch.utils.tensorboard import SummaryWriter
 
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
 def get_parser():
     """
     Generate a parameters parser.
