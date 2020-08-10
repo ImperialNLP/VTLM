@@ -222,6 +222,10 @@ def get_parser():
                         help="Evaluate BLEU score during MT training")
     parser.add_argument("--eval_only", type=bool_flag, default=False,
                         help="Only run evaluations")
+    parser.add_argument("--eval_reverse_images", type=bool_flag, default=False,
+                        help="Reverse images in eval for incongruence tests.")
+    parser.add_argument("--eval_probes", type=str, default=None,
+                        help="A mapping file to define what to mask")
 
     parser.add_argument("--eval_vlm", type=bool_flag, default=False,
                         help="run eval vlm")

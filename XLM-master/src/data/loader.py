@@ -359,14 +359,17 @@ def load_vpara_data(params, data):
                         masked_tokens.append(word_indices)
                         masked_object_labels.append(info[1].split(","))
 
-
             # update dictionary parameters
             set_dico_parameters(params, data, src_data['dico'])
             set_dico_parameters(params, data, tgt_data['dico'])
-            # create ParallelDataset
 
+            # create ParallelDataset
             existing_indices = np.array(existing_indices)
             logger.info(f'Found {existing_indices.size} image features')
+            if params.eval_only and params.eval_reverse_images:
+                logger.info(f'Reversing images for incongruence test')
+                image_names = image_names[::-1]
+
             dataset = ParallelDatasetWithRegions(
                 src_data['sentences'], src_data['positions'][existing_indices],
                 tgt_data['sentences'], tgt_data['positions'][existing_indices],
