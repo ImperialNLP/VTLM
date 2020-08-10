@@ -12,6 +12,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from ..utils import get_image_properties
 from .memory import HashingMemory
 from torch.autograd import Variable
@@ -193,12 +194,13 @@ class MultiHeadAttention(nn.Module):
 
     NEW_ID = itertools.count()
 
-    def __init__(self, n_heads, dim, dropout):
+    def __init__(self, n_heads, dim, dropout, return_att_weights=False):
         super().__init__()
         self.layer_id = next(MultiHeadAttention.NEW_ID)
         self.dim = dim
         self.n_heads = n_heads
         self.dropout = dropout
+        self.return_att_weights = return_att_weights
         assert self.dim % self.n_heads == 0
 
         self.q_lin = Linear(dim, dim)
@@ -258,8 +260,11 @@ class MultiHeadAttention(nn.Module):
         weights = F.dropout(weights, p=self.dropout, training=self.training)  # (bs, n_heads, qlen, klen)
         context = torch.matmul(weights, v)                                    # (bs, n_heads, qlen, dim_per_head)
         context = unshape(context)                                            # (bs, qlen, dim)
+        if self.return_att_weights:
+            return self.out_lin(context),weights
+        else:
 
-        return self.out_lin(context)
+            return self.out_lin(context)
 
 
 class TransformerFFN(nn.Module):
@@ -306,7 +311,7 @@ class TransformerModel(nn.Module):
 
     ATTRIBUTES = ['encoder', 'with_output', 'eos_index', 'pad_index', 'n_langs', 'n_words', 'dim', 'n_layers', 'n_heads', 'hidden_dim', 'dropout', 'attention_dropout', 'asm', 'asm_cutoffs', 'asm_div_value']
 
-    def __init__(self, params, dico, is_encoder, with_output):
+    def __init__(self, params, dico, is_encoder, with_output,return_att_weights=False):
         """
         Transformer model (encoder or decoder).
         """
@@ -317,6 +322,7 @@ class TransformerModel(nn.Module):
         self.is_decoder = not is_encoder
         self.with_output = with_output
 
+        self.return_att_weights = return_att_weights
         # dictionary / languages
         self.n_langs = params.n_langs
         self.n_words = params.n_words
@@ -370,7 +376,8 @@ class TransformerModel(nn.Module):
                 self.memories['%i_%s' % (layer_id, pos)] = HashingMemory.build(self.dim, self.dim, params)
 
         for layer_id in range(self.n_layers):
-            self.attentions.append(MultiHeadAttention(self.n_heads, self.dim, dropout=self.attention_dropout))
+            self.attentions.append(MultiHeadAttention(self.n_heads, self.dim, dropout=self.attention_dropout,
+                                                      return_att_weights=self.return_att_weights))
             self.layer_norm1.append(nn.LayerNorm(self.dim, eps=1e-12))
             if self.is_decoder:
                 self.layer_norm15.append(nn.LayerNorm(self.dim, eps=1e-12))
@@ -491,7 +498,13 @@ class TransformerModel(nn.Module):
         for i in range(self.n_layers):
 
             # self attention
-            attn = self.attentions[i](tensor, attn_mask, cache=cache)
+            if self.return_att_weights:
+
+
+                attn,weights = self.attentions[i](tensor, attn_mask, cache=cache)
+            else:
+                attn = self.attentions[i](tensor, attn_mask, cache=cache)
+
             attn = F.dropout(attn, p=self.dropout, training=self.training)
             tensor = tensor + attn
             tensor = self.layer_norm1[i](tensor)

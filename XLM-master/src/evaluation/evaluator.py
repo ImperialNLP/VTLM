@@ -12,7 +12,7 @@ from collections import OrderedDict
 import numpy as np
 import torch
 
-from ..utils import to_cuda, restore_segmentation, concat_batches
+from ..utils import to_cuda, restore_segmentation, concat_batches,concat_batches_triple
 from ..model.memory import HashingMemory
 
 
@@ -124,6 +124,7 @@ class Evaluator(object):
             subsample = 1
 
         if lang2 is None:
+
             if stream:
                 iterator = self.data['mono_stream'][lang1][data_set].get_iterator(shuffle=False, subsample=subsample)
             else:
@@ -148,6 +149,38 @@ class Evaluator(object):
                     group_by_size=True,
                     n_sentences=n_sentences
                 )
+
+        for batch in iterator:
+            yield batch if lang2 is None or lang1 < lang2 else batch[::-1]
+
+    def get_iterator_vlm(self, data_set, lang1, lang2=None, stream=False):
+        """
+        Create a new iterator for a dataset.
+        """
+        assert data_set in ['valid', 'test']
+        assert lang1 in self.params.langs
+        assert lang2 is None or lang2 in self.params.langs
+        assert stream is False or lang2 is None
+
+
+        n_sentences = -1
+        subsample = 1
+
+        if lang2 is None:
+            iterator = self.data['vmono'][lang1][data_set].get_iterator(
+                shuffle=False,
+                group_by_size=False,
+                n_sentences=n_sentences,
+            )
+        else:
+            _lang1, _lang2 = (lang1, lang2) if lang1 < lang2 else (lang2, lang1)
+
+
+            iterator = self.data['vpara'][(_lang1, _lang2)][data_set].get_iterator(
+                shuffle=False,
+                group_by_size=True,
+                n_sentences=n_sentences
+            )
 
         for batch in iterator:
             yield batch if lang2 is None or lang1 < lang2 else batch[::-1]
@@ -257,9 +290,12 @@ class Evaluator(object):
                 for lang1, lang2 in set(params.mt_steps + [(l2, l3) for _, l2, l3 in params.bt_steps]):
                     eval_bleu = params.eval_bleu and params.is_master
                     self.evaluate_mt(scores, data_set, lang1, lang2, eval_bleu)
-                # for lang1, lang2 in params.vlm_steps:
-                #     if lang2 is not None:
-                #         self.evaluate_vlm(scores, data_set, lang1, lang2)
+                if params.eval_vlm:
+
+                    for lang1, lang2 in params.mlm_steps:
+
+
+                        self.evaluate_vlm(scores, data_set, lang1, lang2)
 
                 # report average metrics per language
                 _clm_mono = [l1 for (l1, l2) in params.clm_steps if l2 is None]
@@ -445,26 +481,42 @@ class Evaluator(object):
         if eval_memory:
             all_mem_att = {k: [] for k, _ in self.memory_list}
 
-        for batch in self.get_iterator(data_set, lang1, lang2, stream=(lang2 is None)):
-
+        for batch in self.get_iterator_vlm(data_set, lang1, lang2, stream=(lang2 is None)):
             # batch
             if lang2 is None:
-                x, lengths = batch
+                print("processing")
+
+                (x, len1), (img, len_img), (img_dict), (masked_tokens), (masked_object_ids) = batch
+                image_langs = img.new(len_img.max().item(), len1.size(0)).fill_(params.lang2id["img"])
+                langs = x.clone().fill_(lang1_id)
                 positions = None
-                langs = x.clone().fill_(lang1_id) if params.n_langs > 1 else None
+                lengths = len1
             else:
-                (sent1, len1), (sent2, len2) = batch
-                x, lengths, positions, langs = concat_batches(sent1, len1, lang1_id, sent2, len2, lang2_id, params.pad_index, params.eos_index, reset_positions=True)
+                (masked_object_ids), (masked_tokens), (img_dict), (img1, len_img1), (x1, len1), (
+                    x2, len2) = batch
+                # menekse: img1 and leng_im1 only used for getting length of the image portion
+                x, lengths, positions, langs, image_langs = concat_batches_triple(x1, len1, lang1_id, x2, len2,
+                                                                                  lang2_id, img1,
+                                                                                  len_img1, params.lang2id["img"],
+                                                                                  params.pad_index,
+                                                                                  params.eos_index,
+                                                                                  reset_positions=True)
 
             # words to predict
             x, y, pred_mask = self.mask_out(x, lengths, rng)
 
             # cuda
             x, y, pred_mask, lengths, positions, langs = to_cuda(x, y, pred_mask, lengths, positions, langs)
-
+            image_langs = to_cuda(image_langs)[0]
             # forward / loss
-            tensor = model('fwd', x=x, lengths=lengths, positions=positions, langs=langs, causal=False)
-            word_scores, loss = model('predict', tensor=tensor, pred_mask=pred_mask, y=y, get_scores=True)
+            tensor = model('fwd', x=x, lengths=lengths, positions=positions, langs=langs, image_langs=image_langs,
+                           causal=False,
+                           img_dict=img_dict)
+            img_tensor_length = params.num_of_regions
+
+            sent_tensor = tensor[:-img_tensor_length:, :]
+
+            word_scores, loss = model('predict', tensor=sent_tensor, pred_mask=pred_mask, y=y, get_scores=True)
 
             # update stats
             n_words += len(y)
@@ -475,8 +527,8 @@ class Evaluator(object):
                     all_mem_att[k].append((v.last_indices, v.last_scores))
 
         # compute perplexity and prediction accuracy
-        ppl_name = '%s_%s_mlm_ppl' % (data_set, l1l2)
-        acc_name = '%s_%s_mlm_acc' % (data_set, l1l2)
+        ppl_name = '%s_%s_vlm_mlm_ppl' % (data_set, l1l2)
+        acc_name = '%s_%s_vlm_mlm_acc' % (data_set, l1l2)
         scores[ppl_name] = np.exp(xe_loss / n_words) if n_words > 0 else 1e9
         scores[acc_name] = 100. * n_valid / n_words if n_words > 0 else 0.
 

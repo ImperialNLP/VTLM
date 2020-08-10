@@ -19,7 +19,8 @@ from src.trainer import SingleTrainer, EncDecTrainer
 from src.evaluation.evaluator import SingleEvaluator, EncDecEvaluator
 from torch.utils.tensorboard import SummaryWriter
 
-
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 def get_parser():
     """
     Generate a parameters parser.
@@ -75,7 +76,8 @@ def get_parser():
 
     parser.add_argument("--only_vlm", type=bool_flag, default=False,
                         help="Run only vlm step")
-
+    parser.add_argument("--load_vlm_mono", type=bool_flag, default=False,
+                        help="Run only vlm step")
     parser.add_argument("--mask_file_dir", type=str, default=None,
                         help="dir contains masked files")
     # memory parameters
@@ -222,6 +224,9 @@ def get_parser():
     parser.add_argument("--eval_only", type=bool_flag, default=False,
                         help="Only run evaluations")
 
+    parser.add_argument("--eval_vlm", type=bool_flag, default=False,
+                        help="run eval vlm")
+
     # debug
     parser.add_argument("--debug_train", type=bool_flag, default=False,
                         help="Use valid sets for train sets (faster loading)")
@@ -293,6 +298,8 @@ def main(params):
         while trainer.n_sentences < trainer.epoch_size:
 
             if params.only_vlm:
+
+
                 for lang1, lang2 in shuf_order(params.vlm_steps, params):
                     # trainer.mlm_step(lang1, lang2, params.lambda_mlm)
                     if lang1 and lang2:

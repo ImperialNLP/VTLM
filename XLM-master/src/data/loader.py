@@ -144,7 +144,7 @@ def load_mono_data(params, data):
                 data['mono_stream'][lang][splt].select_data(a, b)
 
             # for denoising auto-encoding and online back-translation, we need a non-stream (batched) dataset
-            if lang in params.ae_steps or lang in params.bt_src_langs or params.only_vlm:
+            if lang in params.ae_steps or lang in params.bt_src_langs or params.only_vlm and len(params.mlm_steps) == 1:
 
                 # create batched dataset
                 dataset = Dataset(mono_data['sentences'], mono_data['positions'], params)
@@ -535,18 +535,15 @@ def load_data(params):
     load_mono_data(params, data)
 
     # parallel datasets
-    if not params.only_vlm:
-        load_para_data(params, data)
+    load_para_data(params, data)
 
 
     if params.only_vlm or params.mmt_steps:
-        if "-" in params.mlm_steps:
-
-            load_vpara_data(params,data)
-        if "-" not in params.mlm_steps or ("-" in params.mlm_steps and len(params.mlm_steps.split(",")) >= 2):
+        if params.load_vlm_mono:
 
             load_vmono_data(params,data)
-            print("that should work")
+        else:
+            load_vpara_data(params, data)
 
     # monolingual data summary
     if "mono_stream" in data:
