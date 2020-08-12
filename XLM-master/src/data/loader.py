@@ -6,6 +6,7 @@
 #
 
 import os
+import random
 from logging import getLogger
 
 import numpy as np
@@ -15,6 +16,7 @@ from .dataset import StreamDataset, Dataset, ParallelDataset, ParallelDatasetWit
 from .dictionary import BOS_WORD, EOS_WORD, PAD_WORD, UNK_WORD, MASK_WORD
 
 logger = getLogger()
+
 
 
 def process_binarized(data, params):
@@ -366,9 +368,12 @@ def load_vpara_data(params, data):
             # create ParallelDataset
             existing_indices = np.array(existing_indices)
             logger.info(f'Found {existing_indices.size} image features')
-            if params.eval_only and params.eval_reverse_images:
-                logger.info(f'Reversing images for incongruence test')
-                image_names = image_names[::-1]
+            if params.eval_only and params.eval_image_order:
+                logger.info(f'** eval_image_order: {params.eval_image_order}')
+                if params.eval_image_order.lower() == 'reverse':
+                    image_names = image_names[::-1]
+                elif params.eval_image_order.lower() == 'shuffle':
+                    random.shuffle(image_names)
 
             dataset = ParallelDatasetWithRegions(
                 src_data['sentences'], src_data['positions'][existing_indices],
