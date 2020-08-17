@@ -1,6 +1,6 @@
 #!/bin/bash
 DATA_PATH=/data2/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe/multi30k
-DUMP_PATH=/data/ozan/experiments/xlm_mmvc_multi30k_ftune_v2
+DUMP_PATH=/data/ozan/experiments/mmvc/mmvc_code/multi30k_ftune_v3
 
 CUR_DIR=`dirname $0`
 TRAIN=`realpath ${CUR_DIR}/../train.py`
