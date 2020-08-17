@@ -6,7 +6,7 @@ MODEL="${DUMP_PATH}/periodic-${1}.pth"
 
 shift 1
 
-ipython -i train.py -- --exp_name xlm_en_de_img --dump_path "${DUMP_PATH}_probing" \
+python train.py --exp_name xlm_en_de_img --dump_path "${DUMP_PATH}_probing" \
   --data_path $DATA_PATH --reload_model $MODEL \
   --lgs 'en-de' --clm_steps '' --mlm_steps 'en-de' --emb_dim 512 \
   --n_layers 6 --n_heads 8 --dropout '0.1' \
