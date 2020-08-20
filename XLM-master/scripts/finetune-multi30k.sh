@@ -29,6 +29,8 @@ EPOCH=`wc -l ${DATA_PATH}/train.${PAIR}.$L1 | head -n1 | cut -d' ' -f1`
 BS=${BS:-64}
 LR=${LR:-0.00001}
 NAME="${CKPT_NAME}_ftune_bs${BS}_lr${LR}"
+PREFIX=${PREFIX:-}
+DUMP_PATH="${DUMP_PATH}/${PREFIX}"
 
 CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 
