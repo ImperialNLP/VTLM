@@ -635,7 +635,7 @@ class ParallelDatasetWithRegions(Dataset):
                             f.write(f_name + "\n")
                             print('File is empty')
             except:
-                    pass
+                print(f'Cannot load {image_name}')
 
         return img_data, good_indices
 

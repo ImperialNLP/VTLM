@@ -97,8 +97,7 @@ class Evaluator(object):
         if self.params.is_master:
             params.hyp_path = os.path.join(params.dump_path, 'hypotheses')
             subprocess.Popen('mkdir -p %s' % params.hyp_path, shell=True).wait()
-            if "-" in params.mlm_steps:
-                self.create_reference_files()
+            self.create_reference_files()
 
     def get_iterator(self, data_set, lang1, lang2=None, stream=False):
         """
@@ -191,8 +190,10 @@ class Evaluator(object):
         """
         params = self.params
         params.ref_paths = {}
+        data = self.data.get('para', self.data.get('vpara', None))
+        assert data is not None, "Either `para` or `vpara` should be set."
 
-        for (lang1, lang2), v in self.data['para'].items():
+        for (lang1, lang2), v in data.items():
 
             assert lang1 < lang2
 

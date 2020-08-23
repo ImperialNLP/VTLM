@@ -538,24 +538,20 @@ def load_data(params):
     """
     data = {}
 
-    # monolingual datasets
-
-    load_mono_data(params, data)
-
-    # parallel datasets
-    load_para_data(params, data)
-
-
     if params.only_vlm or params.mmt_steps:
         if params.load_vlm_mono:
-
             load_vmono_data(params,data)
         else:
             load_vpara_data(params, data)
+    else:
+        # monolingual datasets
+        load_mono_data(params, data)
+
+        # parallel datasets
+        load_para_data(params, data)
 
     # monolingual data summary
     if "mono_stream" in data:
-
         logger.info('============ Data summary')
         for lang, v in data['mono_stream'].items():
             for data_set in v.keys():
