@@ -640,7 +640,7 @@ class EncDecEvaluator(Evaluator):
                     generated, lengths = decoder.generate(enc1, len1+img_len, lang2_id, max_len=max_len)
                 else:
                     generated, lengths = decoder.generate_beam(
-                        enc1, len1, lang2_id, beam_size=params.beam_size,
+                        enc1, len1+img_len, lang2_id, beam_size=params.beam_size,
                         length_penalty=params.length_penalty,
                         early_stopping=params.early_stopping,
                         max_len=max_len
