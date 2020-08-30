@@ -318,7 +318,7 @@ def main(params):
 
                 # machine translation steps
                 for lang1, lang2 in shuf_order(params.ir_steps, params):
-                    trainer.ir_step(lang1, lang2, params.lambda_mt, iter)
+                    trainer.ir_step(lang1, lang2, iter)
 
                 for lang1, lang2 in shuf_order(params.mmt_steps, params):
                     trainer.mmt_step(lang1, lang2, params.lambda_mt)

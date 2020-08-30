@@ -403,9 +403,8 @@ class Evaluator(object):
                                                                               params.eos_index, reset_positions=True,
                                                                               double=True)
 
-
-            y = torch.from_numpy(np.zeros(params.batch_size * 2, dtype='int'))
-            y[0:params.batch_size] = 1
+            y = torch.from_numpy(np.zeros(x.shape[1], dtype='int'))
+            y[0:int(x.shape[1] / 2)] = 1
 
             img_x = torch.from_numpy(get_image_properties(img_dict, "detection_classes").astype(dtype='float32'))
 

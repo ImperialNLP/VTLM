@@ -553,10 +553,10 @@ class ParallelDatasetWithRegions(Dataset):
                 masked_object_id = self.masked_object_labels[good_indices]
             if retrieval:
 
-                false_sent_ids = random.sample(range(0, len(self.image_names)), len(sent1))
-                image_name_with_indices_false = zip(sentence_ids, self.image_names[false_sent_ids])
+                false_sent_ids = random.sample(range(0, len(self.image_names)), sent1[1].shape[0])
+                image_name_with_indices_false = zip(false_sent_ids, self.image_names[false_sent_ids])
                 image_features_false, _ = self.load_images(self.region_features_path, image_name_with_indices_false)
-                image_scores_false = self.batch_images(image_features, feat_type="detection_scores")
+                image_scores_false = self.batch_images(image_features_false, feat_type="detection_scores")
                 final_scores_0 = torch.cat((image_scores[0], image_scores_false[0]), 1)
                 final_scores_1 = torch.cat((image_scores[1], image_scores_false[1]), 0)
                 final_scores = (final_scores_0, final_scores_1)
@@ -568,7 +568,7 @@ class ParallelDatasetWithRegions(Dataset):
                 sent2_1 = torch.cat((sent2[1], sent2[1]), 0)
                 sent2 = (sent2_0, sent2_1)
                 img_dict = image_features + image_features_false
-                yield (sent1, sent2, final_scores, img_dict, masked_tokens, masked_object_id, sentence_ids) if return_indices else (sent1, sent2,
+                yield (sent1, sent2, final_scores, img_dict, masked_tokens, masked_object_id, sentence_ids+false_sent_ids) if return_indices else (sent1, sent2,
                                                                                                          final_scores,
                                                                                                          img_dict,masked_tokens, masked_object_id)
             else:
@@ -647,6 +647,7 @@ class ParallelDatasetWithRegions(Dataset):
         for ind, image_name in image_name_with_indices:
             try:
                 f_name = os.path.join(region_features_path, image_name)
+                f_name = "/media/menekse/ubuntu-backup/multi30k_features/43331469.jpg.pkl"
                 with open(f_name, "rb") as f:
                     x = pickle.load(f)
                     if len(x) != 0 and len(x["detection_scores"]) == 36:

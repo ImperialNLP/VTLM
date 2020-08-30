@@ -970,14 +970,11 @@ class Trainer(object):
         self.stats['processed_s'] += lengths.size(0)
         self.stats['processed_w'] += pred_mask.sum().item()
 
-    def ir_step(self, lang1, lang2,lambda_coeff, iter): # (32,36,8,8,1586),(32,36,4)
+    def ir_step(self, lang1, lang2, iter): # (32,36,8,8,1586),(32,36,4)
         """
         Masked word prediction step.
         MLM objective is lang2 is None, TLM objective otherwise.
         """
-        assert lambda_coeff >= 0
-        if lambda_coeff == 0:
-            return
         params = self.params
         name = 'model' if params.encoder_only else 'encoder'
         model = getattr(self, name)
@@ -987,8 +984,8 @@ class Trainer(object):
         x, lengths, positions, langs, image_langs, img_dict, masked_object_ids, masked_tokens, _ = self.generate_batch_vpara_ir(lang1, lang2, 'pred_object', retrieval=True)
         x, lengths, positions, langs, _ = self.round_batch(x, lengths, positions, langs)
 
-        y = torch.from_numpy(np.zeros(params.batch_size*2, dtype='int'))
-        y[0:params.batch_size] = 1
+        y = torch.from_numpy(np.zeros(x.shape[1], dtype='int'))
+        y[0:int(x.shape[1]/2)] = 1
 
         img_x = torch.from_numpy(get_image_properties(img_dict, "detection_classes").astype(dtype = 'float32'))
 
@@ -1005,7 +1002,6 @@ class Trainer(object):
         _, loss = model('predict_ir', tensor=sent_tensor[0],  y=y, get_scores=False)
 
         self.stats[('IR-%s' % lang1) if lang2 is None else ('IR-%s-%s' % (lang1, lang2))].append(loss.item())
-        loss = lambda_coeff * loss
 
         if iter % 100 == 0:
             self.writer.add_scalar('total_loss',
