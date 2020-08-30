@@ -12,7 +12,7 @@ from collections import OrderedDict
 import numpy as np
 import torch
 
-from ..utils import to_cuda, restore_segmentation, concat_batches
+from ..utils import to_cuda, restore_segmentation, concat_batches, concat_batches_triple, get_image_properties
 from ..model.memory import HashingMemory
 
 
@@ -147,6 +147,13 @@ class Evaluator(object):
                     group_by_size=True,
                     n_sentences=n_sentences
                 )
+            elif self.params.ir_steps:
+                iterator = self.data['vpara'][(_lang1, _lang2)][data_set].get_iterator(
+                    shuffle=False,
+                    group_by_size=True,
+                    n_sentences=n_sentences,
+                    retrieval=True
+                )
             else:
                 iterator = self.data['para'][(_lang1, _lang2)][data_set].get_iterator(
                     shuffle=False,
@@ -183,7 +190,7 @@ class Evaluator(object):
                 lang2_txt = []
 
                 # convert to text
-                if params.mmt_steps:
+                if params.mmt_steps or params.ir_steps:
                     for (sent1, len1), (sent2, len2), (img, img_len), _, _, _ in self.get_iterator(data_set, lang1, lang2):
                         lang1_txt.extend(convert_to_text(sent1, len1, self.dico, params))
                         lang2_txt.extend(convert_to_text(sent2, len2, self.dico, params))
@@ -249,6 +256,10 @@ class Evaluator(object):
                 # causal prediction task (evaluate perplexity and accuracy)
                 for lang1, lang2 in params.clm_steps:
                     self.evaluate_clm(scores, data_set, lang1, lang2)
+
+                for lang1, lang2 in params.ir_steps:
+                    self.evaluate_ir(scores, data_set, lang1, lang2)
+
 
                 # prediction task (evaluate perplexity and accuracy)
                 for lang1, lang2 in params.mlm_steps:
@@ -346,6 +357,82 @@ class Evaluator(object):
         acc_name = '%s_%s_clm_acc' % (data_set, l1l2)
         scores[ppl_name] = np.exp(xe_loss / n_words)
         scores[acc_name] = 100. * n_valid / n_words
+
+        # compute memory usage
+        if eval_memory:
+            for mem_name, mem_att in all_mem_att.items():
+                eval_memory_usage(scores, '%s_%s_%s' % (data_set, l1l2, mem_name), mem_att, params.mem_size)
+
+    def evaluate_ir(self, scores, data_set, lang1, lang2):
+        """
+        Evaluate perplexity and next word prediction accuracy.
+        """
+        params = self.params
+        assert data_set in ['valid', 'test']
+        assert lang1 in params.langs
+        assert lang2 in params.langs or lang2 is None
+
+        model = self.model if params.encoder_only else self.encoder
+        model.eval()
+        model = model.module if params.multi_gpu else model
+
+        # Deterministic masking
+        rng = np.random.RandomState(0)
+
+        lang1_id = params.lang2id[lang1]
+        lang2_id = params.lang2id[lang2] if lang2 is not None else None
+        l1l2 = lang1 if lang2 is None else f"{lang1}_{lang2}"
+
+        n_words = 0
+        xe_loss = 0
+        n_valid = 0
+
+        # only save states / evaluate usage on the validation set
+        eval_memory = params.use_memory and data_set == 'valid' and self.params.is_master
+        HashingMemory.EVAL_MEMORY = eval_memory
+        if eval_memory:
+            all_mem_att = {k: [] for k, _ in self.memory_list}
+
+        for batch in self.get_iterator(data_set, lang1, lang2, stream=(lang2 is None)):
+
+            _, _, img_dict, (img1, len_img1), (x1, len1), (x2, len2) = batch
+            x, lengths, positions, langs, image_langs = concat_batches_triple(x1, len1, lang1_id, x2, len2, lang2_id,
+                                                                              img1,
+                                                                              len_img1, params.lang2id["img"],
+                                                                              params.pad_index,
+                                                                              params.eos_index, reset_positions=True,
+                                                                              double=True)
+
+
+            y = torch.from_numpy(np.zeros(params.batch_size * 2, dtype='int'))
+            y[0:params.batch_size] = 1
+
+            img_x = torch.from_numpy(get_image_properties(img_dict, "detection_classes").astype(dtype='float32'))
+
+            # cuda
+            x, lengths, positions, langs = to_cuda(x, lengths, positions, langs)
+            img_x, image_langs, y = to_cuda(img_x, image_langs, y)
+
+            # forward / loss
+            tensor = model('fwd', x=x, lengths=lengths, positions=positions, langs=langs, image_langs=image_langs,
+                           causal=False,
+                           img_dict=img_dict)
+            img_tensor_length = params.num_of_regions
+            sent_tensor = tensor[:-img_tensor_length:, :]
+
+            word_scores, loss = model('predict_ir', tensor=sent_tensor[0], y=y, get_scores=True)
+
+            # update stats
+            n_words += len(y)
+            xe_loss += loss.item() * len(y)
+            n_valid += (word_scores.max(1)[1] == y).sum().item()
+            if eval_memory:
+                for k, v in self.memory_list:
+                    all_mem_att[k].append((v.last_indices, v.last_scores))
+
+        # compute perplexity and prediction accuracy
+        acc_name = '%s_%s_ir_acc' % (data_set, l1l2)
+        scores[acc_name] = 100. * n_valid / n_words if n_words > 0 else 0.
 
         # compute memory usage
         if eval_memory:

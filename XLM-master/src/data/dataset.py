@@ -12,7 +12,7 @@ import torch
 import os
 import pickle
 import bz2
-
+import random
 from torch.utils.data import Sampler
 
 logger = getLogger()
@@ -93,7 +93,7 @@ class Dataset(object):
         self.pos = pos
         self.lengths = self.pos[:, 1] - self.pos[:, 0]
 
-        # check number of sentences
+        # fcheck number of sentences
         assert len(self.pos) == (self.sent == self.eos_index).sum()
 
         # # remove empty sentences
@@ -526,7 +526,7 @@ class ParallelDatasetWithRegions(Dataset):
         # sanity checks
         self.check()
 
-    def get_batches_iterator(self, batches, return_indices):
+    def get_batches_iterator(self, batches, return_indices, retrieval=False):
         """
         Return a sentences iterator, given the associated sentence batches.
         """
@@ -548,13 +548,35 @@ class ParallelDatasetWithRegions(Dataset):
             sent1 = self.batch_sentences([self.sent1[a:b] for a, b in pos1])
             sent2 = self.batch_sentences([self.sent2[a:b] for a, b in pos2])
             if self.masked_tokens is not None and self.masked_object_labels is not None:
+
                 masked_tokens = self.masked_tokens[good_indices]
                 masked_object_id = self.masked_object_labels[good_indices]
-            yield (sent1, sent2, image_scores, img_all_dict, masked_tokens, masked_object_id, sentence_ids) if return_indices else (sent1, sent2,
-                                                                                                     image_scores,
-                                                                                                     img_all_dict,masked_tokens, masked_object_id)
+            if retrieval:
 
-    def get_iterator(self, shuffle, group_by_size=False, n_sentences=-1, return_indices=False):
+                false_sent_ids = random.sample(range(0, len(self.image_names)), len(sent1))
+                image_name_with_indices_false = zip(sentence_ids, self.image_names[false_sent_ids])
+                image_features_false, _ = self.load_images(self.region_features_path, image_name_with_indices_false)
+                image_scores_false = self.batch_images(image_features, feat_type="detection_scores")
+                final_scores_0 = torch.cat((image_scores[0], image_scores_false[0]), 1)
+                final_scores_1 = torch.cat((image_scores[1], image_scores_false[1]), 0)
+                final_scores = (final_scores_0, final_scores_1)
+
+                sent1_0 = torch.cat((sent1[0], sent1[0]), 1)
+                sent1_1 = torch.cat((sent1[1], sent1[1]), 0)
+                sent1 = (sent1_0, sent1_1)
+                sent2_0 = torch.cat((sent2[0], sent2[0]), 1)
+                sent2_1 = torch.cat((sent2[1], sent2[1]), 0)
+                sent2 = (sent2_0, sent2_1)
+                img_dict = image_features + image_features_false
+                yield (sent1, sent2, final_scores, img_dict, masked_tokens, masked_object_id, sentence_ids) if return_indices else (sent1, sent2,
+                                                                                                         final_scores,
+                                                                                                         img_dict,masked_tokens, masked_object_id)
+            else:
+                yield (sent1, sent2, image_scores, img_all_dict, masked_tokens, masked_object_id, sentence_ids) if return_indices else (sent1, sent2,
+                                                                                                         image_scores,
+                                                                                                         img_all_dict,masked_tokens, masked_object_id)
+
+    def get_iterator(self, shuffle, group_by_size=False, n_sentences=-1, return_indices=False, retrieval=False):
         """
         Return a sentences iterator.
         """
@@ -595,7 +617,7 @@ class ParallelDatasetWithRegions(Dataset):
         # assert set.union(*[set(x.tolist()) for x in batches]) == set(range(n_sentences))  # slow
 
         # return the iterator
-        return self.get_batches_iterator(batches, return_indices)
+        return self.get_batches_iterator(batches, return_indices, retrieval=retrieval)
 
     def batch_images(self, images, feat_type):
         """
@@ -625,6 +647,7 @@ class ParallelDatasetWithRegions(Dataset):
         for ind, image_name in image_name_with_indices:
             try:
                 f_name = os.path.join(region_features_path, image_name)
+                f_name = "/media/menekse/ubuntu-backup/multi30k_features/43331469.jpg.pkl"
                 with open(f_name, "rb") as f:
                     x = pickle.load(f)
                     if len(x) != 0 and len(x["detection_scores"]) == 36:

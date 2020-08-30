@@ -157,7 +157,9 @@ class PredLayer(nn.Module):
         dim = params.emb_dim
 
         if params.asm is False:
+
             self.proj = Linear(dim, params.n_words, bias=True)
+
         else:
             self.proj = nn.AdaptiveLogSoftmaxWithLoss(
                 in_features=dim,
@@ -167,7 +169,7 @@ class PredLayer(nn.Module):
                 head_bias=True,  # default is False
             )
 
-    def forward(self, x, y, get_scores=False):
+    def forward(self, x, y, get_scores=False, ir=False):
         """
         Compute the loss, and optionally the scores.
         """
@@ -179,6 +181,49 @@ class PredLayer(nn.Module):
         else:
             _, loss = self.proj(x, y)
             scores = self.proj.log_prob(x) if get_scores else None
+        return scores, loss
+
+    def get_scores(self, x):
+        """
+        Compute scores.
+        """
+        assert x.dim() == 2
+        return self.proj.log_prob(x) if self.asm else self.proj(x)
+
+
+class PredLayerIR(nn.Module):
+    """
+    Prediction layer (cross_entropy or adaptive_softmax).
+    """
+    def __init__(self, params):
+        super().__init__()
+        self.asm = params.asm
+        self.n_words = params.n_words
+        self.pad_index = params.pad_index
+        dim = params.emb_dim
+
+
+        self.proj = Linear(dim, 2, bias=True)
+
+
+    def forward(self, x, y, get_scores=False, ir=False):
+        """
+        Compute the loss, and optionally the scores.
+        """
+        assert (y == self.pad_index).sum().item() == 0
+
+        if ir:
+            scores = self.proj(x).view(-1, 2)
+            loss = F.cross_entropy(scores, y, reduction='mean')
+
+        else:
+
+            if self.asm is False:
+                scores = self.proj(x).view(-1, self.n_words)
+                loss = F.cross_entropy(scores, y, reduction='mean')
+            else:
+                _, loss = self.proj(x, y)
+                scores = self.proj.log_prob(x) if get_scores else None
         return scores, loss
 
     def get_scores(self, x):
@@ -388,6 +433,10 @@ class TransformerModel(nn.Module):
             if params.share_inout_emb:
                 self.pred_layer.proj.weight = self.embeddings.weight
 
+        if params.ir_steps:
+            self.pred_layer_ir = PredLayerIR(params)
+
+
     def forward(self, mode, **kwargs):
         """
         Forward function with different forward modes.
@@ -397,6 +446,8 @@ class TransformerModel(nn.Module):
             return self.fwd(**kwargs)
         elif mode == 'predict':
             return self.predict(**kwargs)
+        elif mode == 'predict_ir':
+            return self.predict_ir(**kwargs)
         elif mode == 'predict_img_class':
             return self.predict_img_class(**kwargs)
         else:
@@ -535,6 +586,17 @@ class TransformerModel(nn.Module):
         """
         masked_tensor = tensor[pred_mask.unsqueeze(-1).expand_as(tensor)].view(-1, self.dim)
         scores, loss = self.pred_layer(masked_tensor, y, get_scores)
+        return scores, loss
+
+    def predict_ir(self, tensor, y, get_scores):
+        """
+        Given the last hidden state, compute word scores and/or the loss.
+            `pred_mask` is a ByteTensor of shape (slen, bs), filled with 1 when
+                we need to predict a word
+            `y` is a LongTensor of shape (pred_mask.sum(),)
+            `get_scores` is a boolean specifying whether we need to return scores
+        """
+        scores, loss = self.pred_layer_ir(tensor, y, get_scores, ir=True)
         return scores, loss
 
     def predict_img_class(self, tensor, pred_mask, y, get_scores):

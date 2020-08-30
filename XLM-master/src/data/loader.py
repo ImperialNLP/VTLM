@@ -172,7 +172,8 @@ def load_para_data(params, data):
     """
     data['para'] = {}
 
-    required_para_train = set(params.clm_steps + params.mlm_steps + params.pc_steps + params.mt_steps + params.mmt_steps)
+    required_para_train = set(params.clm_steps + params.mlm_steps + params.pc_steps + params.mt_steps + params.mmt_steps
+                              + params.ir_steps)
 
 
     for src, tgt in params.para_dataset.keys():
@@ -237,7 +238,8 @@ def load_vpara_data(params, data):
     """
     data['vpara'] = {}
 
-    required_para_train = set(params.clm_steps + params.mlm_steps + params.pc_steps + params.mt_steps + params.mmt_steps)
+    required_para_train = set(params.clm_steps + params.mlm_steps + params.pc_steps + params.mt_steps + params.mmt_steps
+                              + params.ir_steps)
 
     for src, tgt in params.para_dataset.keys():
 
@@ -371,6 +373,7 @@ def check_data_params(params):
     # machine translation steps
     params.mt_steps = [tuple(s.split('-')) for s in params.mt_steps.split(',') if len(s) > 0]
     params.mmt_steps = [tuple(s.split('-')) for s in params.mmt_steps.split(',') if len(s) > 0]
+    params.ir_steps = [tuple(s.split('-')) for s in params.ir_steps.split(',') if len(s) > 0]
 
     assert all([len(x) == 2 for x in params.mt_steps])
     assert all([l1 in params.langs and l2 in params.langs for l1, l2 in params.mt_steps])
@@ -408,7 +411,8 @@ def check_data_params(params):
     assert all([all([os.path.isfile(p) for p in paths.values()]) for paths in params.mono_dataset.values()])
 
     # check parallel datasets
-    required_para_train = set(params.clm_steps + params.mlm_steps + params.pc_steps + params.mt_steps + params.mmt_steps)
+    required_para_train = set(params.clm_steps + params.mlm_steps + params.pc_steps + params.mt_steps + params.mmt_steps
+                              + params.ir_steps)
     required_para = required_para_train | set([(l2, l3) for _, l2, l3 in params.bt_steps])
     params.para_dataset = {
         (src, tgt): {
@@ -455,7 +459,7 @@ def load_data(params):
 
     # parallel datasets
     load_para_data(params, data)
-    if params.only_vlm or params.mmt_steps:
+    if params.only_vlm or params.mmt_steps or params.ir_steps:
         load_vpara_data(params,data)
 
     # monolingual data summary

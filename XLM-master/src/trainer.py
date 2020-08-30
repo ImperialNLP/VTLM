@@ -130,6 +130,7 @@ class Trainer(object):
             [('PC-%s-%s' % (l1, l2), []) for l1, l2 in params.pc_steps] +
             [('AE-%s' % lang, []) for lang in params.ae_steps] +
             [('MT-%s-%s' % (l1, l2), []) for l1, l2 in params.mt_steps] +
+            [('IR-%s-%s' % (l1, l2), []) for l1, l2 in params.ir_steps] +
             [('MMT-%s-%s' % (l1, l2), []) for l1, l2 in params.mmt_steps] +
             [('BT-%s-%s-%s' % (l1, l2, l3), []) for l1, l2, l3 in params.bt_steps]
         )
@@ -327,7 +328,7 @@ class Trainer(object):
         self.iterators[(iter_name, lang1, lang2)] = iterator
         return iterator
 
-    def get_iterator_vpara(self, iter_name, lang1, lang2, stream):
+    def get_iterator_vpara(self, iter_name, lang1, lang2, stream, retrieval=False):
         """
         Create a new iterator for a dataset.
         """
@@ -349,6 +350,7 @@ class Trainer(object):
                 shuffle=True,
                 group_by_size=self.params.group_by_size,
                 n_sentences=-1,
+                retrieval=retrieval
             )
 
         self.iterators[(iter_name, lang1, lang2)] = iterator
@@ -376,7 +378,7 @@ class Trainer(object):
 
     def get_batch_vpara(self, iter_name,
 
-                  lang1, lang2=None, stream=False):
+                  lang1, lang2=None, stream=False, retrieval=False):
         """
         Return a batch of sentences from a dataset.
         """
@@ -385,11 +387,11 @@ class Trainer(object):
         assert stream is False or lang2 is None
         iterator = self.iterators.get((iter_name, lang1, lang2), None)
         if iterator is None:
-            iterator = self.get_iterator_vpara(iter_name, lang1, lang2, stream)
+            iterator = self.get_iterator_vpara(iter_name, lang1, lang2, stream, retrieval=retrieval)
         try:
             x = next(iterator)
         except StopIteration:
-            iterator = self.get_iterator_vpara(iter_name, lang1, lang2, stream)
+            iterator = self.get_iterator_vpara(iter_name, lang1, lang2, stream, retrieval=retrieval)
             x = next(iterator)
         return x if lang2 is None or lang1 < lang2 else x[::-1]
 
@@ -642,6 +644,22 @@ class Trainer(object):
         x, lengths, positions, langs, image_langs = concat_batches_triple(x1, len1, lang1_id, x2, len2, lang2_id, img1,
                                                              len_img1, params.lang2id["img"], params.pad_index,
                                                                     params.eos_index, reset_positions=True)
+
+        return x, lengths, positions, langs, image_langs, img_dict, masked_object_ids, masked_tokens,  (None, None)
+
+    def generate_batch_vpara_ir(self, lang1, lang2, name, retrieval=False):
+        """
+        Prepare a batch (for causal or non-causal mode).
+        """
+        params = self.params
+        lang1_id = params.lang2id[lang1]
+        lang2_id = params.lang2id[lang2] if lang2 is not None else None
+
+        (masked_object_ids), (masked_tokens), (img_dict), (img1, len_img1), (x1, len1), (x2, len2) = self.get_batch_vpara(name, lang1, lang2, retrieval=retrieval)
+        # menekse: img1 and leng_im1 only used for getting length of the image portion
+        x, lengths, positions, langs, image_langs = concat_batches_triple(x1, len1, lang1_id, x2, len2, lang2_id, img1,
+                                                             len_img1, params.lang2id["img"], params.pad_index,
+                                                                    params.eos_index, reset_positions=True, double=True)
 
         return x, lengths, positions, langs, image_langs, img_dict, masked_object_ids, masked_tokens,  (None, None)
 
@@ -951,6 +969,55 @@ class Trainer(object):
         self.n_sentences += params.batch_size
         self.stats['processed_s'] += lengths.size(0)
         self.stats['processed_w'] += pred_mask.sum().item()
+
+    def ir_step(self, lang1, lang2,lambda_coeff, iter): # (32,36,8,8,1586),(32,36,4)
+        """
+        Masked word prediction step.
+        MLM objective is lang2 is None, TLM objective otherwise.
+        """
+        assert lambda_coeff >= 0
+        if lambda_coeff == 0:
+            return
+        params = self.params
+        name = 'model' if params.encoder_only else 'encoder'
+        model = getattr(self, name)
+        model.train()
+
+        # generate batch / select words to predict
+        x, lengths, positions, langs, image_langs, img_dict, masked_object_ids, masked_tokens, _ = self.generate_batch_vpara_ir(lang1, lang2, 'pred_object', retrieval=True)
+        x, lengths, positions, langs, _ = self.round_batch(x, lengths, positions, langs)
+
+        y = torch.from_numpy(np.zeros(params.batch_size*2, dtype='int'))
+        y[0:params.batch_size] = 1
+
+        img_x = torch.from_numpy(get_image_properties(img_dict, "detection_classes").astype(dtype = 'float32'))
+
+        # cuda
+        x, lengths, positions, langs = to_cuda(x, lengths, positions, langs)
+        img_x, image_langs, y  = to_cuda(img_x, image_langs, y)
+
+        # forward / loss
+        tensor = model('fwd', x=x, lengths=lengths, positions=positions, langs=langs, image_langs=image_langs, causal=False,
+                       img_dict = img_dict)
+        img_tensor_length = params.num_of_regions
+        sent_tensor = tensor[:-img_tensor_length:,:]
+
+        _, loss = model('predict_ir', tensor=sent_tensor[0],  y=y, get_scores=False)
+
+        self.stats[('IR-%s' % lang1) if lang2 is None else ('IR-%s-%s' % (lang1, lang2))].append(loss.item())
+        loss = lambda_coeff * loss
+
+        if iter % 100 == 0:
+            self.writer.add_scalar('total_loss',
+                              loss.data.tolist(),
+                              iter)
+
+        # optimize
+        self.optimize(loss)
+
+        # number of processed sentences / words
+        self.n_sentences += params.batch_size
+        self.stats['processed_s'] += lengths.size(0)
 
     def pc_step(self, lang1, lang2, lambda_coeff):
         """

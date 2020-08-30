@@ -243,7 +243,7 @@ def concat_batches(x1, len1, lang1_id, x2, len2, lang2_id, pad_idx, eos_idx, res
 
     return x, lengths, positions, langs
 
-def concat_batches_triple(x1, len1, lang1_id, x2, len2, lang2_id, img, len_img, img_id, pad_idx, eos_idx, reset_positions):
+def concat_batches_triple(x1, len1, lang1_id, x2, len2, lang2_id, img, len_img, img_id, pad_idx, eos_idx, reset_positions, double=False):
     """
     Concat batches with different languages.
     """
@@ -253,6 +253,7 @@ def concat_batches_triple(x1, len1, lang1_id, x2, len2, lang2_id, img, len_img, 
     if not reset_positions:
         lengths -= 1
     slen, bs = lengths.max().item(), lengths.size(0)
+
 
     x = x1.new(slen, bs).fill_(pad_idx)
     x[:len1.max().item()].copy_(x1)

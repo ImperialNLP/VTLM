@@ -184,6 +184,8 @@ def get_parser():
                         help="Masked prediction with object region steps (VLM / TVLM )")
     parser.add_argument("--mt_steps", type=str, default="",
                         help="Machine translation steps")
+    parser.add_argument("--ir_steps", type=str, default="",
+                        help="Machine translation steps")
     parser.add_argument("--mmt_steps", type=str, default="",
                         help="Machine translation steps")
     parser.add_argument("--ae_steps", type=str, default="",
@@ -315,8 +317,8 @@ def main(params):
                     trainer.mt_step(lang, lang, params.lambda_ae)
 
                 # machine translation steps
-                for lang1, lang2 in shuf_order(params.mt_steps, params):
-                    trainer.mt_step(lang1, lang2, params.lambda_mt)
+                for lang1, lang2 in shuf_order(params.ir_steps, params):
+                    trainer.ir_step(lang1, lang2, params.lambda_mt, iter)
 
                 for lang1, lang2 in shuf_order(params.mmt_steps, params):
                     trainer.mmt_step(lang1, lang2, params.lambda_mt)
