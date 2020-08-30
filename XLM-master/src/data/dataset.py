@@ -647,7 +647,6 @@ class ParallelDatasetWithRegions(Dataset):
         for ind, image_name in image_name_with_indices:
             try:
                 f_name = os.path.join(region_features_path, image_name)
-                f_name = "/media/menekse/ubuntu-backup/multi30k_features/43331469.jpg.pkl"
                 with open(f_name, "rb") as f:
                     x = pickle.load(f)
                     if len(x) != 0 and len(x["detection_scores"]) == 36:
