@@ -224,11 +224,10 @@ def get_parser():
                         help="Only run evaluations")
     parser.add_argument("--eval_image_order", type=str, default='',
                         help="`reverse` or `shuffle` for incongruent mode.")
-    parser.add_argument("--eval_probes", type=str, default=None,
-                        help="A mapping file to define what to mask")
-
     parser.add_argument("--eval_vlm", type=bool_flag, default=False,
                         help="run eval vlm")
+    parser.add_argument("--eval_probes", type=str, default=None,
+                        help="A mapping file to define what to mask")
 
     # debug
     parser.add_argument("--debug_train", type=bool_flag, default=False,
