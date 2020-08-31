@@ -23,6 +23,47 @@ assert os.path.isfile(BLEU_SCRIPT_PATH)
 logger = getLogger()
 
 
+def convert_to_text(batch, lengths, dico, params):
+    """
+    Convert a batch of sentences to a list of text sentences.
+    """
+    batch = batch.cpu().numpy()
+    lengths = lengths.cpu().numpy()
+
+    slen, bs = batch.shape
+    assert lengths.max() == slen and lengths.shape[0] == bs
+    assert (batch[0] == params.eos_index).sum() == bs
+    assert (batch == params.eos_index).sum() == 2 * bs
+    sentences = []
+
+    for j in range(bs):
+        words = []
+        for k in range(1, lengths[j]):
+            if batch[k, j] == params.eos_index:
+                break
+            words.append(dico[batch[k, j]])
+        sentences.append(" ".join(words))
+    return sentences
+
+
+def eval_moses_bleu(ref, hyp):
+    """
+    Given a file of hypothesis and reference files,
+    evaluate the BLEU score using Moses scripts.
+    """
+    assert os.path.isfile(hyp)
+    assert os.path.isfile(ref) or os.path.isfile(ref + '0')
+    assert os.path.isfile(BLEU_SCRIPT_PATH)
+    command = BLEU_SCRIPT_PATH + ' %s < %s'
+    p = subprocess.Popen(command % (ref, hyp), stdout=subprocess.PIPE, shell=True)
+    result = p.communicate()[0].decode("utf-8")
+    if result.startswith('BLEU'):
+        return float(result[7:result.index(',')])
+    else:
+        logger.warning('Impossible to parse BLEU score! "%s"' % result)
+        return -1
+
+
 def kl_score(x):
     # assert np.abs(np.sum(x) - 1) < 1e-5
     _x = x.copy()
@@ -94,10 +135,17 @@ class Evaluator(object):
         self.memory_list = trainer.memory_list
 
         # create directory to store hypotheses, and reference files for BLEU evaluation
-        if self.params.is_master:
+        if self.params.is_master and any(self.params.mt_steps + self.params.mmt_steps):
             params.hyp_path = os.path.join(params.dump_path, 'hypotheses')
             subprocess.Popen('mkdir -p %s' % params.hyp_path, shell=True).wait()
             self.create_reference_files()
+
+    def print_batch(self, x):
+        slen, bs = x.size()
+        for i in range(bs):
+            idxs = x[:, i].tolist()
+            s = ' '.join([self.dico.id2word[k] for k in idxs])
+            print(s)
 
     def get_iterator(self, data_set, lang1, lang2=None, stream=False):
         """
@@ -123,9 +171,9 @@ class Evaluator(object):
             subsample = 1
 
         if lang2 is None:
-
             if stream:
-                iterator = self.data['mono_stream'][lang1][data_set].get_iterator(shuffle=False, subsample=subsample)
+                iterator = self.data['mono_stream'][lang1][data_set].get_iterator(
+                    shuffle=False, subsample=subsample)
             else:
                 iterator = self.data['mono'][lang1][data_set].get_iterator(
                     shuffle=False,
@@ -135,19 +183,18 @@ class Evaluator(object):
         else:
             assert stream is False
             _lang1, _lang2 = (lang1, lang2) if lang1 < lang2 else (lang2, lang1)
-
-            if self.params.mmt_steps:
-                iterator = self.data['vpara'][(_lang1, _lang2)][data_set].get_iterator(
-                    shuffle=False,
-                    group_by_size=True,
-                    n_sentences=n_sentences
-                )
+            if 'vpara' in self.data.keys():
+                data = self.data['vpara']
+            elif 'para' in self.data.keys():
+                data = self.data['para']
             else:
-                iterator = self.data['para'][(_lang1, _lang2)][data_set].get_iterator(
-                    shuffle=False,
-                    group_by_size=True,
-                    n_sentences=n_sentences
-                )
+                raise RuntimeError('No `para` or `vpara` in self.data')
+
+            iterator = data[(_lang1, _lang2)][data_set].get_iterator(
+                shuffle=False,
+                group_by_size=True,
+                n_sentences=n_sentences
+            )
 
         for batch in iterator:
             yield batch if lang2 is None or lang1 < lang2 else batch[::-1]
@@ -198,7 +245,6 @@ class Evaluator(object):
             assert lang1 < lang2
 
             for data_set in ['valid', 'test']:
-
                 # define data paths
                 lang1_path = os.path.join(params.hyp_path, 'ref.{0}-{1}.{2}.txt'.format(lang2, lang1, data_set))
                 lang2_path = os.path.join(params.hyp_path, 'ref.{0}-{1}.{2}.txt'.format(lang1, lang2, data_set))
@@ -272,31 +318,27 @@ class Evaluator(object):
         scores = OrderedDict({'epoch': trainer.epoch})
 
         with torch.no_grad():
-
             for data_set in ['valid', 'test']:
-
                 # causal prediction task (evaluate perplexity and accuracy)
                 for lang1, lang2 in params.clm_steps:
                     self.evaluate_clm(scores, data_set, lang1, lang2)
 
                 # prediction task (evaluate perplexity and accuracy)
                 for lang1, lang2 in params.mlm_steps:
-                    self.evaluate_mlm(scores, data_set, lang1, lang2)
-
-                for lang1, lang2 in params.mmt_steps:
-                    eval_bleu = params.eval_bleu and params.is_master
-                    self.evaluate_mmt(scores, data_set, lang1, lang2, eval_bleu)
+                    if params.eval_vlm:
+                        self.evaluate_vlm(scores, data_set, lang1, lang2)
+                    else:
+                        self.evaluate_mlm(scores, data_set, lang1, lang2)
 
                 # machine translation task (evaluate perplexity and accuracy)
                 for lang1, lang2 in set(params.mt_steps + [(l2, l3) for _, l2, l3 in params.bt_steps]):
                     eval_bleu = params.eval_bleu and params.is_master
                     self.evaluate_mt(scores, data_set, lang1, lang2, eval_bleu)
-                if params.eval_vlm:
 
-                    for lang1, lang2 in params.mlm_steps:
-
-
-                        self.evaluate_vlm(scores, data_set, lang1, lang2)
+                # multimodal machine translation task
+                for lang1, lang2 in params.mmt_steps:
+                    eval_bleu = params.eval_bleu and params.is_master
+                    self.evaluate_mmt(scores, data_set, lang1, lang2, eval_bleu)
 
                 # report average metrics per language
                 _clm_mono = [l1 for (l1, l2) in params.clm_steps if l2 is None]
@@ -406,6 +448,7 @@ class Evaluator(object):
         n_words = 0
         xe_loss = 0
         n_valid = 0
+        y, pred_mask = None, None
 
         # only save states / evaluate usage on the validation set
         eval_memory = params.use_memory and data_set == 'valid' and self.params.is_master
@@ -414,21 +457,40 @@ class Evaluator(object):
             all_mem_att = {k: [] for k, _ in self.memory_list}
 
         for batch in self.get_iterator(data_set, lang1, lang2, stream=(lang2 is None and not self.params.only_vlm)):
-
-            # batch
             if lang2 is None:
-                x, lengths = batch
                 positions = None
-                langs = x.clone().fill_(lang1_id) if params.n_langs > 1 else None
+                x, lengths = sent1, len1
+                langs = sent1.clone().fill_(lang1_id) if params.n_langs > 1 else None
             else:
                 (sent1, len1), (sent2, len2) = batch
-                x, lengths, positions, langs = concat_batches(sent1, len1, lang1_id, sent2, len2, lang2_id, params.pad_index, params.eos_index, reset_positions=True)
+                x, lengths, positions, langs = concat_batches(
+                    sent1, len1, lang1_id, sent2, len2, lang2_id,
+                    params.pad_index, params.eos_index, reset_positions=True)
 
-            # words to predict
-            x, y, pred_mask = self.mask_out(x, lengths, rng)
+            if params.word_pred > 0:
+                # words to predict
+                x, y, pred_mask = self.mask_out(x, lengths, rng)
+
+            elif params.eval_probes.startswith('drop_last:'):
+                # drop last words
+                option = params.eval_probes.replace('drop_last:', '')
+                # can be lang1, lang2 or lang1-lang2
+                drop_langs = option.split('-')
+
+                pred_mask = torch.zeros_like(x).bool()
+                bs = x.size(1)
+
+                if lang1 in drop_langs:
+                    pred_mask[len1 - 2, range(bs)] = True
+                if lang2 is not None and lang2 in drop_langs:
+                    pred_mask[len1 + len2 - 2, range(bs)] = True
+
+                y = x[pred_mask]
+                x.masked_scatter_(pred_mask, y.clone().fill_(params.mask_index))
 
             # cuda
-            x, y, pred_mask, lengths, positions, langs = to_cuda(x, y, pred_mask, lengths, positions, langs)
+            x, y, pred_mask, lengths, positions, langs = to_cuda(
+                x, y, pred_mask, lengths, positions, langs)
 
             # forward / loss
             tensor = model('fwd', x=x, lengths=lengths, positions=positions, langs=langs, causal=False)
@@ -485,8 +547,6 @@ class Evaluator(object):
         for batch in self.get_iterator_vlm(data_set, lang1, lang2, stream=(lang2 is None)):
             # batch
             if lang2 is None:
-                print("processing")
-
                 (x, len1), (img, len_img), (img_dict), (masked_tokens), (masked_object_ids) = batch
                 image_langs = img.new(len_img.max().item(), len1.size(0)).fill_(params.lang2id["img"])
                 langs = x.clone().fill_(lang1_id)
@@ -496,25 +556,41 @@ class Evaluator(object):
                 (masked_object_ids), (masked_tokens), (img_dict), (img1, len_img1), (x1, len1), (
                     x2, len2) = batch
                 # menekse: img1 and leng_im1 only used for getting length of the image portion
-                x, lengths, positions, langs, image_langs = concat_batches_triple(x1, len1, lang1_id, x2, len2,
-                                                                                  lang2_id, img1,
-                                                                                  len_img1, params.lang2id["img"],
-                                                                                  params.pad_index,
-                                                                                  params.eos_index,
-                                                                                  reset_positions=True)
+                x, lengths, positions, langs, image_langs = concat_batches_triple(
+                    x1, len1, lang1_id, x2, len2, lang2_id, img1, len_img1,
+                    params.lang2id["img"], params.pad_index, params.eos_index, reset_positions=True)
 
-            # words to predict
-            x, y, pred_mask = self.mask_out(x, lengths, rng)
+            if params.word_pred > 0:
+                # words to predict
+                x, y, pred_mask = self.mask_out(x, lengths, rng)
+
+            elif params.eval_probes.startswith('drop_last:'):
+                # drop last words
+                option = params.eval_probes.replace('drop_last:', '')
+                # can be lang1, lang2 or lang1-lang2
+                drop_langs = option.split('-')
+
+                pred_mask = torch.zeros_like(x).bool()
+                bs = x.size(1)
+
+                if lang1 in drop_langs:
+                    pred_mask[len1 - 2, range(bs)] = True
+                if lang2 is not None and lang2 in drop_langs:
+                    pred_mask[len1 + len2 - 2, range(bs)] = True
+
+                y = x[pred_mask]
+                x.masked_scatter_(pred_mask, y.clone().fill_(params.mask_index))
 
             # cuda
             x, y, pred_mask, lengths, positions, langs = to_cuda(x, y, pred_mask, lengths, positions, langs)
             image_langs = to_cuda(image_langs)[0]
-            # forward / loss
-            tensor = model('fwd', x=x, lengths=lengths, positions=positions, langs=langs, image_langs=image_langs,
-                           causal=False,
-                           img_dict=img_dict)
-            img_tensor_length = params.num_of_regions
 
+            # forward / loss
+            tensor = model(
+                'fwd', x=x, lengths=lengths, positions=positions, langs=langs,
+                image_langs=image_langs, causal=False, img_dict=img_dict)
+
+            img_tensor_length = params.num_of_regions
             sent_tensor = tensor[:-img_tensor_length:, :]
 
             word_scores, loss = model('predict', tensor=sent_tensor, pred_mask=pred_mask, y=y, get_scores=True)
@@ -782,42 +858,6 @@ class EncDecEvaluator(Evaluator):
             bleu = eval_moses_bleu(ref_path, hyp_path)
             logger.info("BLEU %s %s : %f" % (hyp_path, ref_path, bleu))
             scores['%s_%s-%s_mt_bleu' % (data_set, lang1, lang2)] = bleu
-def convert_to_text(batch, lengths, dico, params):
-    """
-    Convert a batch of sentences to a list of text sentences.
-    """
-    batch = batch.cpu().numpy()
-    lengths = lengths.cpu().numpy()
-
-    slen, bs = batch.shape
-    assert lengths.max() == slen and lengths.shape[0] == bs
-    assert (batch[0] == params.eos_index).sum() == bs
-    assert (batch == params.eos_index).sum() == 2 * bs
-    sentences = []
-
-    for j in range(bs):
-        words = []
-        for k in range(1, lengths[j]):
-            if batch[k, j] == params.eos_index:
-                break
-            words.append(dico[batch[k, j]])
-        sentences.append(" ".join(words))
-    return sentences
 
 
-def eval_moses_bleu(ref, hyp):
-    """
-    Given a file of hypothesis and reference files,
-    evaluate the BLEU score using Moses scripts.
-    """
-    assert os.path.isfile(hyp)
-    assert os.path.isfile(ref) or os.path.isfile(ref + '0')
-    assert os.path.isfile(BLEU_SCRIPT_PATH)
-    command = BLEU_SCRIPT_PATH + ' %s < %s'
-    p = subprocess.Popen(command % (ref, hyp), stdout=subprocess.PIPE, shell=True)
-    result = p.communicate()[0].decode("utf-8")
-    if result.startswith('BLEU'):
-        return float(result[7:result.index(',')])
-    else:
-        logger.warning('Impossible to parse BLEU score! "%s"' % result)
-        return -1
+
