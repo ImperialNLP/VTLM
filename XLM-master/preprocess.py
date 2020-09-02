@@ -24,6 +24,11 @@ from src.data.dictionary import Dictionary
 if __name__ == '__main__':
 
     logger = create_logger(None, 0)
+    allow_masked = False
+
+    if '--allow-masked' in sys.argv[1:]:
+        allow_masked = True
+        sys.argv.remove('--allow-masked')
 
     voc_path = sys.argv[1]
     txt_path = sys.argv[2]
@@ -34,7 +39,7 @@ if __name__ == '__main__':
     dico = Dictionary.read_vocab(voc_path)
     logger.info("")
 
-    data = Dictionary.index_data(txt_path, bin_path, dico)
+    data = Dictionary.index_data(txt_path, bin_path, dico, allow_special=allow_masked)
     logger.info("%i words (%i unique) in %i sentences." % (
         len(data['sentences']) - len(data['positions']),
         len(data['dico']),
