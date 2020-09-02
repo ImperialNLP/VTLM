@@ -166,7 +166,7 @@ class Dictionary(object):
         return dico
 
     @staticmethod
-    def index_data(path, bin_path, dico):
+    def index_data(path, bin_path, dico, allow_special=False):
         """
         Index sentences with a dictionary.
         """
@@ -195,7 +195,7 @@ class Dictionary(object):
             for w in s:
                 word_id = dico.index(w, no_unk=False)
                 # if we find a special word which is not an unknown word, skip the sentence
-                if 0 <= word_id < 4 + SPECIAL_WORDS and word_id != 3:
+                if not allow_special and 0 <= word_id < 4 + SPECIAL_WORDS and word_id != 3:
                     logger.warning('Found unexpected special word "%s" (%i)!!' % (w, word_id))
                     continue
                 assert word_id >= 0
