@@ -228,6 +228,8 @@ def get_parser():
                         help="run eval vlm")
     parser.add_argument("--eval_probes", type=str, default=None,
                         help="A mapping file to define what to mask")
+    parser.add_argument("--zero_mask_emb", type=str, default=False,
+                        help="Set [MASK] embedding to a zero-vector.")
 
     # debug
     parser.add_argument("--debug_train", type=bool_flag, default=False,

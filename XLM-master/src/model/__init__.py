@@ -200,6 +200,12 @@ def build_model(params, dico):
                 for param in encoder.parameters():
                     param.requires_grad = False
 
+        if params.zero_mask_emb:
+            logger.info('** Zeroing [MASK] embedding')
+            with torch.no_grad():
+                encoder.embeddings.weight[5].fill_(0)
+                decoder.embeddings.weight[5].fill_(0)
+
         logger.info("Encoder: {}".format(encoder))
         logger.info("Decoder: {}".format(decoder))
         logger.info("Number of parameters (encoder): %i" % sum([p.numel() for p in encoder.parameters() if p.requires_grad]))
