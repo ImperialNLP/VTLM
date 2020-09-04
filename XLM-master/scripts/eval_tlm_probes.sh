@@ -9,8 +9,8 @@ if [ -z $CKPT ]; then
 fi
 shift 1
 
-DATA_PATH="/data2/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe"
-DUMP_PATH=${CKPT/.pth/_probes/}
+DATA_PATH="/data2/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe.nodot"
+DUMP_PATH=${CKPT/.pth/_probes_nodot/}
 TRAIN=`dirname $0`/../train.py
 
 python $TRAIN --exp_name tlm_en_de_vanilla --dump_path "${DUMP_PATH}" \
