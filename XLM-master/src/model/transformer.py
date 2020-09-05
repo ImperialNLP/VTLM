@@ -14,7 +14,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ..utils import get_image_properties
-from .memory import HashingMemory
 from torch.autograd import Variable
 
 
@@ -366,15 +365,6 @@ class TransformerModel(nn.Module):
             self.layer_norm15 = nn.ModuleList()
             self.encoder_attn = nn.ModuleList()
 
-        # memories
-        self.memories = nn.ModuleDict()
-        if getattr(params, 'use_memory', False):
-            mem_positions = params.mem_enc_positions if is_encoder else params.mem_dec_positions
-            for layer_id, pos in mem_positions:
-                assert 0 <= layer_id <= params.n_layers - 1
-                assert pos in ['in', 'after']
-                self.memories['%i_%s' % (layer_id, pos)] = HashingMemory.build(self.dim, self.dim, params)
-
         for layer_id in range(self.n_layers):
             self.attentions.append(MultiHeadAttention(self.n_heads, self.dim, dropout=self.attention_dropout,
                                                       return_att_weights=self.return_att_weights))
@@ -382,10 +372,8 @@ class TransformerModel(nn.Module):
             if self.is_decoder:
                 self.layer_norm15.append(nn.LayerNorm(self.dim, eps=1e-12))
                 self.encoder_attn.append(MultiHeadAttention(self.n_heads, self.dim, dropout=self.attention_dropout))
-            if ('%i_in' % layer_id) in self.memories:
-                self.ffns.append(None)
-            else:
-                self.ffns.append(TransformerFFN(self.dim, self.hidden_dim, self.dim, dropout=self.dropout, gelu_activation=params.gelu_activation))
+
+            self.ffns.append(TransformerFFN(self.dim, self.hidden_dim, self.dim, dropout=self.dropout, gelu_activation=params.gelu_activation))
             self.layer_norm2.append(nn.LayerNorm(self.dim, eps=1e-12))
 
         # output layer
@@ -515,16 +503,8 @@ class TransformerModel(nn.Module):
                 tensor = self.layer_norm15[i](tensor)
 
             # FFN
-            if ('%i_in' % i) in self.memories:
-                tensor = tensor + self.memories['%i_in' % i](tensor)
-            else:
-                tensor = tensor + self.ffns[i](tensor)
+            tensor = tensor + self.ffns[i](tensor)
             tensor = self.layer_norm2[i](tensor)
-
-            # memory
-            if ('%i_after' % i) in self.memories:
-                tensor = tensor + self.memories['%i_after' % i](tensor)
-            # TODO: add extra layer norm here?
 
             tensor *= mask.unsqueeze(-1).to(tensor.dtype)
 

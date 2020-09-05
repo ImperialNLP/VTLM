@@ -13,7 +13,6 @@ import numpy as np
 import torch
 
 from ..utils import to_cuda, restore_segmentation, concat_batches, concat_batches_triple
-from ..model.memory import HashingMemory
 
 
 BLEU_SCRIPT_PATH = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'multi-bleu.perl')
@@ -84,44 +83,6 @@ def tops(x):
     return top50, top90, top99
 
 
-def eval_memory_usage(scores, name, mem_att, mem_size):
-    """
-    Evaluate memory usage (HashingMemory / FFN).
-    """
-    # memory slot scores
-    assert mem_size > 0
-    mem_scores_w = np.zeros(mem_size, dtype=np.float32)  # weighted scores
-    mem_scores_u = np.zeros(mem_size, dtype=np.float32)  # unweighted scores
-
-    # sum each slot usage
-    for indices, weights in mem_att:
-        np.add.at(mem_scores_w, indices, weights)
-        np.add.at(mem_scores_u, indices, 1)
-
-    # compute the KL distance to the uniform distribution
-    mem_scores_w = mem_scores_w / mem_scores_w.sum()
-    mem_scores_u = mem_scores_u / mem_scores_u.sum()
-
-    # store stats
-    scores['%s_mem_used' % name] = float(100 * (mem_scores_w != 0).sum() / len(mem_scores_w))
-
-    scores['%s_mem_kl_w' % name] = float(kl_score(mem_scores_w))
-    scores['%s_mem_kl_u' % name] = float(kl_score(mem_scores_u))
-
-    scores['%s_mem_gini_w' % name] = float(gini_score(mem_scores_w))
-    scores['%s_mem_gini_u' % name] = float(gini_score(mem_scores_u))
-
-    top50, top90, top99 = tops(mem_scores_w)
-    scores['%s_mem_top50_w' % name] = float(top50)
-    scores['%s_mem_top90_w' % name] = float(top90)
-    scores['%s_mem_top99_w' % name] = float(top99)
-
-    top50, top90, top99 = tops(mem_scores_u)
-    scores['%s_mem_top50_u' % name] = float(top50)
-    scores['%s_mem_top90_u' % name] = float(top90)
-    scores['%s_mem_top99_u' % name] = float(top99)
-
-
 class Evaluator(object):
 
     def __init__(self, trainer, data, params):
@@ -132,7 +93,6 @@ class Evaluator(object):
         self.data = data
         self.dico = data['dico']
         self.params = params
-        self.memory_list = trainer.memory_list
 
         # create directory to store hypotheses, and reference files for BLEU evaluation
         if self.params.is_master and any(self.params.mt_steps + self.params.mmt_steps):
@@ -378,12 +338,6 @@ class Evaluator(object):
         xe_loss = 0
         n_valid = 0
 
-        # only save states / evaluate usage on the validation set
-        eval_memory = params.use_memory and data_set == 'valid' and self.params.is_master
-        HashingMemory.EVAL_MEMORY = eval_memory
-        if eval_memory:
-            all_mem_att = {k: [] for k, _ in self.memory_list}
-
         for batch in self.get_iterator(data_set, lang1, lang2, stream=(lang2 is None)):
 
             # batch
@@ -412,9 +366,6 @@ class Evaluator(object):
             n_words += y.size(0)
             xe_loss += loss.item() * len(y)
             n_valid += (word_scores.max(1)[1] == y).sum().item()
-            if eval_memory:
-                for k, v in self.memory_list:
-                    all_mem_att[k].append((v.last_indices, v.last_scores))
 
         # log
         logger.info("Found %i words in %s. %i were predicted correctly." % (n_words, data_set, n_valid))
@@ -424,11 +375,6 @@ class Evaluator(object):
         acc_name = '%s_%s_clm_acc' % (data_set, l1l2)
         scores[ppl_name] = np.exp(xe_loss / n_words)
         scores[acc_name] = 100. * n_valid / n_words
-
-        # compute memory usage
-        if eval_memory:
-            for mem_name, mem_att in all_mem_att.items():
-                eval_memory_usage(scores, '%s_%s_%s' % (data_set, l1l2, mem_name), mem_att, params.mem_size)
 
     def evaluate_mlm(self, scores, data_set, lang1, lang2):
         """
@@ -453,12 +399,6 @@ class Evaluator(object):
         xe_loss = 0
         n_valid = 0
         y, pred_mask = None, None
-
-        # only save states / evaluate usage on the validation set
-        eval_memory = params.use_memory and data_set == 'valid' and self.params.is_master
-        HashingMemory.EVAL_MEMORY = eval_memory
-        if eval_memory:
-            all_mem_att = {k: [] for k, _ in self.memory_list}
 
         for batch in self.get_iterator(data_set, lang1, lang2, stream=(lang2 is None and not self.params.only_vlm)):
             if lang2 is None:
@@ -505,20 +445,12 @@ class Evaluator(object):
             n_words += len(y)
             xe_loss += loss.item() * len(y)
             n_valid += (word_scores.max(1)[1] == y).sum().item()
-            if eval_memory:
-                for k, v in self.memory_list:
-                    all_mem_att[k].append((v.last_indices, v.last_scores))
 
         # compute perplexity and prediction accuracy
         ppl_name = '%s_%s_mlm_ppl' % (data_set, l1l2)
         acc_name = '%s_%s_mlm_acc' % (data_set, l1l2)
         scores[ppl_name] = np.exp(xe_loss / n_words) if n_words > 0 else 1e9
         scores[acc_name] = 100. * n_valid / n_words if n_words > 0 else 0.
-
-        # compute memory usage
-        if eval_memory:
-            for mem_name, mem_att in all_mem_att.items():
-                eval_memory_usage(scores, '%s_%s_%s' % (data_set, l1l2, mem_name), mem_att, params.mem_size)
 
     def evaluate_vlm(self, scores, data_set, lang1, lang2):
         """
@@ -542,12 +474,6 @@ class Evaluator(object):
         n_words = 0
         xe_loss = 0
         n_valid = 0
-
-        # only save states / evaluate usage on the validation set
-        eval_memory = params.use_memory and data_set == 'valid' and self.params.is_master
-        HashingMemory.EVAL_MEMORY = eval_memory
-        if eval_memory:
-            all_mem_att = {k: [] for k, _ in self.memory_list}
 
         for batch in self.get_iterator_vlm(data_set, lang1, lang2, stream=(lang2 is None)):
             # batch
@@ -604,21 +530,12 @@ class Evaluator(object):
             n_words += len(y)
             xe_loss += loss.item() * len(y)
             n_valid += (word_scores.max(1)[1] == y).sum().item()
-            if eval_memory:
-                for k, v in self.memory_list:
-                    all_mem_att[k].append((v.last_indices, v.last_scores))
 
         # compute perplexity and prediction accuracy
         ppl_name = '%s_%s_mlm_ppl' % (data_set, l1l2)
         acc_name = '%s_%s_mlm_acc' % (data_set, l1l2)
         scores[ppl_name] = np.exp(xe_loss / n_words) if n_words > 0 else 1e9
         scores[acc_name] = 100. * n_valid / n_words if n_words > 0 else 0.
-
-        # compute memory usage
-        if eval_memory:
-            for mem_name, mem_att in all_mem_att.items():
-                eval_memory_usage(scores, '%s_%s_%s' % (data_set, l1l2, mem_name), mem_att, params.mem_size)
-
 
 class SingleEvaluator(Evaluator):
 
@@ -663,12 +580,6 @@ class EncDecEvaluator(Evaluator):
         xe_loss = 0
         n_valid = 0
 
-        # only save states / evaluate usage on the validation set
-        eval_memory = params.use_memory and data_set == 'valid' and self.params.is_master
-        HashingMemory.EVAL_MEMORY = eval_memory
-        if eval_memory:
-            all_mem_att = {k: [] for k, _ in self.memory_list}
-
         # store hypothesis to compute BLEU score
         if eval_bleu:
             hypothesis = []
@@ -709,9 +620,6 @@ class EncDecEvaluator(Evaluator):
             n_words += y.size(0)
             xe_loss += loss.item() * len(y)
             n_valid += (word_scores.max(1)[1] == y).sum().item()
-            if eval_memory:
-                for k, v in self.memory_list:
-                    all_mem_att[k].append((v.last_indices, v.last_scores))
 
             # generate translation - translate / convert to text
             if eval_bleu:
@@ -730,11 +638,6 @@ class EncDecEvaluator(Evaluator):
         # compute perplexity and prediction accuracy
         scores['%s_%s-%s_mt_ppl' % (data_set, lang1, lang2)] = np.exp(xe_loss / n_words)
         scores['%s_%s-%s_mt_acc' % (data_set, lang1, lang2)] = 100. * n_valid / n_words
-
-        # compute memory usage
-        if eval_memory:
-            for mem_name, mem_att in all_mem_att.items():
-                eval_memory_usage(scores, '%s_%s-%s_%s' % (data_set, lang1, lang2, mem_name), mem_att, params.mem_size)
 
         # compute BLEU
         if eval_bleu:
@@ -776,12 +679,6 @@ class EncDecEvaluator(Evaluator):
         xe_loss = 0
         n_valid = 0
 
-        # only save states / evaluate usage on the validation set
-        eval_memory = params.use_memory and data_set == 'valid' and self.params.is_master
-        HashingMemory.EVAL_MEMORY = eval_memory
-        if eval_memory:
-            all_mem_att = {k: [] for k, _ in self.memory_list}
-
         # store hypothesis to compute BLEU score
         if eval_bleu:
             hypothesis = []
@@ -817,9 +714,6 @@ class EncDecEvaluator(Evaluator):
             n_words += y.size(0)
             xe_loss += loss.item() * len(y)
             n_valid += (word_scores.max(1)[1] == y).sum().item()
-            if eval_memory:
-                for k, v in self.memory_list:
-                    all_mem_att[k].append((v.last_indices, v.last_scores))
 
             # generate translation - translate / convert to text
             if eval_bleu:
@@ -839,14 +733,8 @@ class EncDecEvaluator(Evaluator):
         scores['%s_%s-%s_mt_ppl' % (data_set, lang1, lang2)] = np.exp(xe_loss / n_words)
         scores['%s_%s-%s_mt_acc' % (data_set, lang1, lang2)] = 100. * n_valid / n_words
 
-        # compute memory usage
-        if eval_memory:
-            for mem_name, mem_att in all_mem_att.items():
-                eval_memory_usage(scores, '%s_%s-%s_%s' % (data_set, lang1, lang2, mem_name), mem_att, params.mem_size)
-
         # compute BLEU
         if eval_bleu:
-
             # hypothesis / reference paths
             hyp_name = 'hyp{0}.{1}-{2}.{3}.txt'.format(scores['epoch'], lang1, lang2, data_set)
             hyp_path = os.path.join(params.hyp_path, hyp_name)

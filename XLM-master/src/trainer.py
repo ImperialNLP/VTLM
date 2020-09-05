@@ -14,7 +14,6 @@ import random
 from .optim import get_optimizer
 from .utils import to_cuda, concat_batches, find_modules, concat_batches_triple, get_image_properties
 from .utils import parse_lambda_config, update_lambdas
-from .model.memory import HashingMemory
 from .model.transformer import TransformerFFN
 from torch.utils.tensorboard import SummaryWriter
 
@@ -40,14 +39,11 @@ class Trainer(object):
         # data iterators
         self.iterators = {}
 
-        # list memory components
-        self.memory_list = []
         self.ffn_list = []
         for name in self.MODEL_NAMES:
-            find_modules(getattr(self, name), f'self.{name}', HashingMemory, self.memory_list)
             find_modules(getattr(self, name), f'self.{name}', TransformerFFN, self.ffn_list)
-        logger.info("Found %i memories." % len(self.memory_list))
         logger.info("Found %i FFN." % len(self.ffn_list))
+
         # set parameters
         self.set_parameters()
 
@@ -155,19 +151,12 @@ class Trainer(object):
         """
         Set parameters.
         """
-        params = self.params
         self.parameters = {}
         named_params = []
         for name in self.MODEL_NAMES:
             named_params.extend([(k, p) for k, p in getattr(self, name).named_parameters() if p.requires_grad])
 
-        # model (excluding memory values)
-        self.parameters['model'] = [p for k, p in named_params if not k.endswith(HashingMemory.MEM_VALUES_PARAMS)]
-
-        # memory values
-        if params.use_memory:
-            self.parameters['memory'] = [p for k, p in named_params if k.endswith(HashingMemory.MEM_VALUES_PARAMS)]
-            assert len(self.parameters['memory']) == len(params.mem_enc_positions) + len(params.mem_dec_positions)
+        self.parameters['model'] = [p for k, p in named_params]
 
         # log
         for k, v in self.parameters.items():
@@ -181,12 +170,8 @@ class Trainer(object):
         params = self.params
         self.optimizers = {}
 
-        # model optimizer (excluding memory values)
+        # model optimizer
         self.optimizers['model'] = get_optimizer(self.parameters['model'], params.optimizer)
-
-        # memory values optimizer
-        if params.use_memory:
-            self.optimizers['memory'] = get_optimizer(self.parameters['memory'], params.mem_values_optimizer)
 
         # log
         logger.info("Optimizers: %s" % ", ".join(self.optimizers.keys()))
@@ -308,7 +293,6 @@ class Trainer(object):
         """
         logger.info("Creating new training data iterator (%s) ..." % ','.join(
             [str(x) for x in [iter_name, lang1, lang2] if x is not None]))
-        assert stream or not self.params.use_memory or not self.params.mem_query_batchnorm
         if lang2 is None:
             if stream:
                 iterator = self.data['mono_stream'][lang1]['train'].get_iterator(shuffle=True)
@@ -344,7 +328,6 @@ class Trainer(object):
         """
         logger.info("Creating new training data iterator (%s) ..." % ','.join(
             [str(x) for x in [iter_name, lang1, lang2] if x is not None]))
-        assert stream or not self.params.use_memory or not self.params.mem_query_batchnorm
         if lang2 is None:
             if stream:
                 iterator = self.data['mono_stream'][lang1]['train'].get_iterator(shuffle=True)
@@ -645,9 +628,8 @@ class Trainer(object):
         lang2_id = params.lang2id[lang2] if lang2 is not None else None
 
         if lang2 is not None:
+            (masked_object_ids), (masked_tokens), (img_dict), (img1, len_img1), (x1, len1), (x2, len2) = self.get_batch_vpara(name, lang1, lang2)
 
-            (masked_object_ids), (masked_tokens), (img_dict), (img1, len_img1), (x1, len1), (
-            x2, len2) = self.get_batch_vpara(name, lang1, lang2)
             # menekse: img1 and leng_im1 only used for getting length of the image portion
             x, lengths, positions, langs, image_langs = concat_batches_triple(x1, len1, lang1_id, x2, len2, lang2_id, img1,
                                                                               len_img1, params.lang2id["img"],

@@ -10,14 +10,17 @@ import json
 import random
 import argparse
 
+import numpy as np
+
+import torch
+from torch.utils.tensorboard import SummaryWriter
+
 from src.slurm import init_signal_handler, init_distributed_mode
 from src.data.loader import check_data_params, load_data
 from src.utils import bool_flag, initialize_exp, set_sampling_probs, shuf_order
 from src.model import check_model_params, build_model
-from src.model.memory import HashingMemory
 from src.trainer import SingleTrainer, EncDecTrainer
 from src.evaluation.evaluator import SingleEvaluator, EncDecEvaluator
-from torch.utils.tensorboard import SummaryWriter
 
 
 def get_parser():
@@ -40,9 +43,8 @@ def get_parser():
                         help="Save the model periodically (0 to disable)")
     parser.add_argument("--exp_id", type=str, default="",
                         help="Experiment ID")
-    # NOTE: --weight_seed unused as of now
-    parser.add_argument("--weight_seed", type=int, default=-1,
-                        help="Random seed for weight init (-1 for non-determinism).")
+    parser.add_argument("--other_seed", type=int, default=-1,
+                        help="Random seed for weight init/masking/misc (-1 for non-determinism).")
     parser.add_argument("--iter_seed", type=int, default=12345,
                         help="Random seed for data iteration/shuffling (-1 for non-determinism).")
 
@@ -84,15 +86,6 @@ def get_parser():
                         help="Run only vlm step")
     parser.add_argument("--mask_file_dir", type=str, default=None,
                         help="dir contains masked files")
-    # memory parameters
-    parser.add_argument("--use_memory", type=bool_flag, default=False,
-                        help="Use an external memory")
-    if parser.parse_known_args()[0].use_memory:
-        HashingMemory.register_args(parser)
-        parser.add_argument("--mem_enc_positions", type=str, default="",
-                            help="Memory positions in the encoder ('4' for inside layer 4, '7,10+' for inside layer 7 and after layer 10)")
-        parser.add_argument("--mem_dec_positions", type=str, default="",
-                            help="Memory positions in the decoder. Same syntax as `mem_enc_positions`.")
 
     # adaptive softmax
     parser.add_argument("--asm", type=bool_flag, default=False,
@@ -363,9 +356,12 @@ if __name__ == '__main__':
         params.debug_slurm = True
         params.debug_train = True
 
-    if params.weight_seed == -1:
-        # non-deterministic
-        params.weight_seed = None
+    if params.other_seed > -1:
+        # deterministic
+        torch.manual_seed(params.other_seed)
+        torch.cuda.manual_seed(params.other_seed)
+        np.random.seed(params.other_seed)
+        random.seed(params.other_seed)
 
     if params.iter_seed == -1:
         # non-deterministic

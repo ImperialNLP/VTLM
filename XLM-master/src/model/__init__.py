@@ -11,7 +11,6 @@ import torch
 
 from .pretrain import load_embeddings
 from .transformer import DECODER_ONLY_PARAMS, TransformerModel  # , TRANSFORMER_LAYER_PARAMS
-from .memory import HashingMemory
 
 
 logger = getLogger()
@@ -56,21 +55,6 @@ def check_model_params(params):
         assert all([x.isdigit() for x in s])
         params.asm_cutoffs = [int(x) for x in s]
         assert params.max_vocab == -1 or params.asm_cutoffs[-1] < params.max_vocab
-
-    # memory
-    if params.use_memory:
-        HashingMemory.check_params(params)
-        s_enc = [x for x in params.mem_enc_positions.split(',') if x != '']
-        s_dec = [x for x in params.mem_dec_positions.split(',') if x != '']
-        assert len(s_enc) == len(set(s_enc))
-        assert len(s_dec) == len(set(s_dec))
-        assert all(x.isdigit() or x[-1] == '+' and x[:-1].isdigit() for x in s_enc)
-        assert all(x.isdigit() or x[-1] == '+' and x[:-1].isdigit() for x in s_dec)
-        params.mem_enc_positions = [(int(x[:-1]), 'after') if x[-1] == '+' else (int(x), 'in') for x in s_enc]
-        params.mem_dec_positions = [(int(x[:-1]), 'after') if x[-1] == '+' else (int(x), 'in') for x in s_dec]
-        assert len(params.mem_enc_positions) + len(params.mem_dec_positions) > 0
-        assert len(params.mem_enc_positions) == 0 or 0 <= min([x[0] for x in params.mem_enc_positions]) <= max([x[0] for x in params.mem_enc_positions]) <= params.n_layers - 1
-        assert len(params.mem_dec_positions) == 0 or 0 <= min([x[0] for x in params.mem_dec_positions]) <= max([x[0] for x in params.mem_dec_positions]) <= params.n_layers - 1
 
     # reload pretrained word embeddings
     if params.reload_emb != '':
