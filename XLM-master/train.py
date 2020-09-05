@@ -40,6 +40,10 @@ def get_parser():
                         help="Save the model periodically (0 to disable)")
     parser.add_argument("--exp_id", type=str, default="",
                         help="Experiment ID")
+    parser.add_argument("--weight_seed", type=int, default=-1,
+                        help="Random seed for weight init (-1 for non-determinism).")
+    parser.add_argument("--iter_seed", type=int, default=12345,
+                        help="Random seed for data iteration/shuffling (-1 for non-determinism).")
 
     # float16 / AMP API
     parser.add_argument("--fp16", type=bool_flag, default=False,
@@ -208,7 +212,6 @@ def get_parser():
     parser.add_argument("--freeze_encoder", action='store_true',
                         help="Freeze encoder in enc-dec setups i.e MT finetuning.")
 
-
     # beam search (for MT only)
     parser.add_argument("--beam_size", type=int, default=1,
                         help="Beam size, default = 1 (greedy decoding)")
@@ -302,20 +305,13 @@ def main(params):
         while trainer.n_sentences < trainer.epoch_size:
 
             if params.only_vlm:
-
-
                 for lang1, lang2 in shuf_order(params.vlm_steps, params):
                     # trainer.mlm_step(lang1, lang2, params.lambda_mlm)
                     if lang1 and lang2:
                         trainer.vlm_step(lang1, lang2, params.lambda_clm, iter)
                     else:
                         trainer.vlm_step(lang1, None, params.lambda_clm, iter)
-
             else:
-                # CLM steps
-                # for lang1, lang2 in shuf_order(params.clm_steps, params):
-                    # trainer.clm_step(lang1, lang2, params.lambda_clm)
-
                 # MLM steps (also includes TLM if lang2 is not None)
                 for lang1, lang2 in shuf_order(params.mlm_steps, params):
                     trainer.mlm_step(lang1, lang2, params.lambda_mlm, iter)
@@ -374,6 +370,14 @@ if __name__ == '__main__':
         params.exp_id = 'debug_%08i' % random.randint(0, 100000000)
         params.debug_slurm = True
         params.debug_train = True
+
+    if params.weight_seed == -1:
+        # non-deterministic
+        params.weight_seed = None
+
+    if params.iter_seed == -1:
+        # non-deterministic
+        params.iter_seed = None
 
     # check parameters
     check_data_params(params)
