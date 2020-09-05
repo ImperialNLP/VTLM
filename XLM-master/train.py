@@ -186,8 +186,6 @@ def get_parser():
                         help="Causal prediction steps (CLM)")
     parser.add_argument("--mlm_steps", type=str, default="",
                         help="Masked prediction steps (MLM / TLM)")
-    parser.add_argument("--vlm_steps", type=str, default="",
-                        help="Masked prediction with object region steps (VLM / TVLM )")
     parser.add_argument("--mt_steps", type=str, default="",
                         help="Machine translation steps")
     parser.add_argument("--mmt_steps", type=str, default="",
@@ -291,7 +289,7 @@ def main(params):
 
     # set sampling probabilities for training
     set_sampling_probs(data, params)
-    iter = 0
+    _iter = 0
 
     # dump initial weights
     trainer.save_checkpoint('initial', include_optimizers=False)
@@ -304,40 +302,35 @@ def main(params):
         trainer.n_sentences = 0
 
         while trainer.n_sentences < trainer.epoch_size:
+            # MLM steps (also includes TLM if lang2 is not None)
+            for lang1, lang2 in shuf_order(params.mlm_steps, params):
+                if params.only_vlm:
+                    # with visual features
+                    trainer.vlm_step(lang1, lang2, params.lambda_mlm, _iter)
+                else:
+                    trainer.mlm_step(lang1, lang2, params.lambda_mlm, _iter)
 
-            if params.only_vlm:
-                for lang1, lang2 in shuf_order(params.vlm_steps, params):
-                    # trainer.mlm_step(lang1, lang2, params.lambda_mlm)
-                    if lang1 and lang2:
-                        trainer.vlm_step(lang1, lang2, params.lambda_clm, iter)
-                    else:
-                        trainer.vlm_step(lang1, None, params.lambda_clm, iter)
-            else:
-                # MLM steps (also includes TLM if lang2 is not None)
-                for lang1, lang2 in shuf_order(params.mlm_steps, params):
-                    trainer.mlm_step(lang1, lang2, params.lambda_mlm, iter)
+            # parallel classification steps
+            for lang1, lang2 in shuf_order(params.pc_steps, params):
+                trainer.pc_step(lang1, lang2, params.lambda_pc)
 
-                # parallel classification steps
-                for lang1, lang2 in shuf_order(params.pc_steps, params):
-                    trainer.pc_step(lang1, lang2, params.lambda_pc)
+            # denoising auto-encoder steps
+            for lang in shuf_order(params.ae_steps):
+                trainer.mt_step(lang, lang, params.lambda_ae)
 
-                # denoising auto-encoder steps
-                for lang in shuf_order(params.ae_steps):
-                    trainer.mt_step(lang, lang, params.lambda_ae)
+            # back-translation steps
+            for lang1, lang2, lang3 in shuf_order(params.bt_steps):
+                trainer.bt_step(lang1, lang2, lang3, params.lambda_bt)
 
-                # machine translation steps
-                for lang1, lang2 in shuf_order(params.mt_steps, params):
-                    trainer.mt_step(lang1, lang2, params.lambda_mt)
+            # machine translation steps
+            for lang1, lang2 in shuf_order(params.mt_steps, params):
+                trainer.mt_step(lang1, lang2, params.lambda_mt)
 
-                for lang1, lang2 in shuf_order(params.mmt_steps, params):
-                    trainer.mmt_step(lang1, lang2, params.lambda_mt)
-
-                # back-translation steps
-                for lang1, lang2, lang3 in shuf_order(params.bt_steps):
-                    trainer.bt_step(lang1, lang2, lang3, params.lambda_bt)
+            for lang1, lang2 in shuf_order(params.mmt_steps, params):
+                trainer.mmt_step(lang1, lang2, params.lambda_mt)
 
             trainer.iter()
-            iter += 1
+            _iter += 1
 
         logger.info("============ End of epoch %i ============" % trainer.epoch)
 
@@ -346,9 +339,7 @@ def main(params):
 
         # print / JSON log
         for k, v in scores.items():
-            writer.add_scalar(k,
-                              v,
-                              iter)
+            writer.add_scalar(k, v, _iter)
             logger.info("%s -> %.6f" % (k, v))
         if params.is_master:
             logger.info("__log__:%s" % json.dumps(scores))

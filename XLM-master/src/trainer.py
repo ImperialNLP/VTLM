@@ -366,9 +366,7 @@ class Trainer(object):
         self.iterators[(iter_name, lang1, lang2)] = iterator
         return iterator
 
-    def get_batch(self, iter_name,
-
-                  lang1, lang2=None, stream=False):
+    def get_batch(self, iter_name, lang1, lang2=None, stream=False):
         """
         Return a batch of sentences from a dataset.
         """
@@ -386,9 +384,7 @@ class Trainer(object):
             x = next(iterator)
         return x if lang2 is None or lang1 < lang2 else x[::-1]
 
-    def get_batch_vpara(self, iter_name,
-
-                        lang1, lang2=None, stream=False):
+    def get_batch_vpara(self, iter_name, lang1, lang2=None, stream=False):
         """
         Return a batch of sentences from a dataset.
         """

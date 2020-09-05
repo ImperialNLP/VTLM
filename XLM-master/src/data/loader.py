@@ -439,12 +439,6 @@ def check_data_params(params):
     # assert all([(l1 in params.langs) and (l2 in params.langs or l2 is None) for l1, l2 in params.mlm_steps])
     assert len(params.mlm_steps) == len(set(params.mlm_steps))
 
-    # MLM / TLM steps
-    vlm_steps = [s for s in params.vlm_steps.split('-') if len(s) > 0]
-    params.vlm_steps = [(s[0], None) if len(s) == 1 else tuple(s) for s in mlm_steps]
-    # assert all([(l1 in params.langs) and (l2 in params.langs or l2 is None) for l1, l2 in params.mlm_steps])
-    assert len(params.vlm_steps) == len(set(params.vlm_steps))
-
     # parallel classification steps
     params.pc_steps = [tuple(s.split('-')) for s in params.pc_steps.split(',') if len(s) > 0]
     assert all([len(x) == 2 for x in params.pc_steps])
