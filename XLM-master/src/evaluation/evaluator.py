@@ -12,7 +12,7 @@ from collections import OrderedDict
 import numpy as np
 import torch
 
-from ..utils import to_cuda, restore_segmentation, concat_batches,concat_batches_triple
+from ..utils import to_cuda, restore_segmentation, concat_batches, concat_batches_triple
 from ..model.memory import HashingMemory
 
 
@@ -215,9 +215,7 @@ class Evaluator(object):
         assert lang2 is None or lang2 in self.params.langs
         assert stream is False or lang2 is None
 
-
         n_sentences = -1
-        subsample = 1
 
         if lang2 is None:
             iterator = self.data['vmono'][lang1][data_set].get_iterator(
@@ -227,7 +225,6 @@ class Evaluator(object):
             )
         else:
             _lang1, _lang2 = (lang1, lang2) if lang1 < lang2 else (lang2, lang1)
-
 
             iterator = self.data['vpara'][(_lang1, _lang2)][data_set].get_iterator(
                 shuffle=False,
@@ -691,13 +688,12 @@ class EncDecEvaluator(Evaluator):
             assert len(y) == (len2 - 1).sum().item()
 
             # cuda
-            x1, len1, langs1, x2, len2, langs2, y, img1, img_len, img_langs = to_cuda(x1, len1, langs1, x2, len2,
-                                                                                      langs2, y,
-                                                                                      imgs, img_len, img_langs)
-
+            x1, len1, langs1, x2, len2, langs2, y, img1, img_len, img_langs = to_cuda(
+                x1, len1, langs1, x2, len2, langs2, y, imgs, img_len, img_langs)
             # encode source sentence
-            enc1 = self.encoder('fwd', x=x1, lengths=len1, langs=langs1, image_langs=img_langs, img_dict=img_dict,
-                                causal=False)
+            enc1 = encoder(
+                'fwd', x=x1, lengths=len1, langs=langs1, image_langs=img_langs,
+                img_dict=img_dict, causal=False)
 
             # encode source sentence
             enc1 = enc1.transpose(0, 1)
@@ -757,7 +753,6 @@ class EncDecEvaluator(Evaluator):
             bleu = eval_moses_bleu(ref_path, hyp_path)
             logger.info("BLEU %s %s : %f" % (hyp_path, ref_path, bleu))
             scores['%s_%s-%s_mmt_bleu' % (data_set, lang1, lang2)] = bleu
-
 
     def evaluate_mt(self, scores, data_set, lang1, lang2, eval_bleu):
         """
@@ -866,6 +861,3 @@ class EncDecEvaluator(Evaluator):
             bleu = eval_moses_bleu(ref_path, hyp_path)
             logger.info("BLEU %s %s : %f" % (hyp_path, ref_path, bleu))
             scores['%s_%s-%s_mt_bleu' % (data_set, lang1, lang2)] = bleu
-
-
-
