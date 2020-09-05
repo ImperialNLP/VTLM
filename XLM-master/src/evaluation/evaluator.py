@@ -175,7 +175,14 @@ class Evaluator(object):
                 iterator = self.data['mono_stream'][lang1][data_set].get_iterator(
                     shuffle=False, subsample=subsample)
             else:
-                iterator = self.data['mono'][lang1][data_set].get_iterator(
+                if 'vmono' in self.data.keys():
+                    data = self.data['vmono']
+                elif 'mono' in self.data.keys():
+                    data = self.data['mono']
+                else:
+                    raise RuntimeError('No `mono` or `vmono` in self.data')
+
+                iterator = data[lang1][data_set].get_iterator(
                     shuffle=False,
                     group_by_size=False,
                     n_sentences=n_sentences,
@@ -345,8 +352,8 @@ class Evaluator(object):
                 if len(_clm_mono) > 0:
                     scores['%s_clm_ppl' % data_set] = np.mean([scores['%s_%s_clm_ppl' % (data_set, lang)] for lang in _clm_mono])
                     scores['%s_clm_acc' % data_set] = np.mean([scores['%s_%s_clm_acc' % (data_set, lang)] for lang in _clm_mono])
-                _mlm_mono = [l1 for (l1, l2) in params.mlm_steps if l2 is None]
 
+                _mlm_mono = [l1 for (l1, l2) in params.mlm_steps if l2 is None]
                 if len(_mlm_mono) > 0:
                     scores['%s_mlm_ppl' % data_set] = np.mean([scores['%s_%s_mlm_ppl' % (data_set, lang)] for lang in _mlm_mono])
                     scores['%s_mlm_acc' % data_set] = np.mean([scores['%s_%s_mlm_acc' % (data_set, lang)] for lang in _mlm_mono])
@@ -459,8 +466,9 @@ class Evaluator(object):
         for batch in self.get_iterator(data_set, lang1, lang2, stream=(lang2 is None and not self.params.only_vlm)):
             if lang2 is None:
                 positions = None
-                x, lengths = sent1, len1
+                sent1, len1 = batch
                 langs = sent1.clone().fill_(lang1_id) if params.n_langs > 1 else None
+                x, lengths = sent1, len1
             else:
                 (sent1, len1), (sent2, len2) = batch
                 x, lengths, positions, langs = concat_batches(
@@ -604,8 +612,8 @@ class Evaluator(object):
                     all_mem_att[k].append((v.last_indices, v.last_scores))
 
         # compute perplexity and prediction accuracy
-        ppl_name = '%s_%s_vlm_mlm_ppl' % (data_set, l1l2)
-        acc_name = '%s_%s_vlm_mlm_acc' % (data_set, l1l2)
+        ppl_name = '%s_%s_mlm_ppl' % (data_set, l1l2)
+        acc_name = '%s_%s_mlm_acc' % (data_set, l1l2)
         scores[ppl_name] = np.exp(xe_loss / n_words) if n_words > 0 else 1e9
         scores[acc_name] = 100. * n_valid / n_words if n_words > 0 else 0.
 
