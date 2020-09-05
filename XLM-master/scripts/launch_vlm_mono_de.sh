@@ -14,4 +14,4 @@ ipython -i train.py -- --exp_name vmlm_de_v2 --dump_path $DUMP_PATH \
   --validation_metrics _valid_mlm_ppl \
   --stopping_criterion '_valid_mlm_ppl,50' --fp16 false --save_periodic 5 \
   --image_names $DATA_PATH --region_feats_path $FEAT_PATH \
-  --only_vlm true --load_vlm_mono true --eval_vlm true
+  --only_vlm true --load_vlm_mono true --eval_vlm true $@
