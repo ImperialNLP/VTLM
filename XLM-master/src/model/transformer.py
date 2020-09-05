@@ -499,8 +499,6 @@ class TransformerModel(nn.Module):
 
             # self attention
             if self.return_att_weights:
-
-
                 attn,weights = self.attentions[i](tensor, attn_mask, cache=cache)
             else:
                 attn = self.attentions[i](tensor, attn_mask, cache=cache)
