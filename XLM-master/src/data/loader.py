@@ -168,6 +168,8 @@ def load_mono_data(params, data):
             logger.info("")
 
     logger.info("")
+
+
 def load_vmono_data(params, data):
     """
     Load monolingual data along with image features.
