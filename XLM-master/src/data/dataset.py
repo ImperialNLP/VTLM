@@ -11,9 +11,7 @@ import numpy as np
 import torch
 import os
 import pickle
-import bz2
 
-from torch.utils.data import Sampler
 
 logger = getLogger()
 
@@ -30,6 +28,9 @@ class StreamDataset(object):
         # checks
         assert len(pos) == (sent == self.eos).sum()
         assert len(pos) == (sent[pos[:, 1]] == self.eos).sum()
+
+        # Set RNG
+        self._rng = np.random.RandomState(seed=params.iter_seed)
 
         n_tokens = len(sent)
         n_batches = math.ceil(n_tokens / (bs * bptt))
@@ -72,7 +73,7 @@ class StreamDataset(object):
         """
         Return a sentences iterator.
         """
-        indexes = (np.random.permutation if shuffle else range)(self.n_batches // subsample)
+        indexes = (self._rng.permutation if shuffle else range)(self.n_batches // subsample)
         for i in indexes:
             a = self.bptt * i
             b = self.bptt * (i + 1)
@@ -82,7 +83,6 @@ class StreamDataset(object):
 class Dataset(object):
 
     def __init__(self, sent, pos, params):
-
         self.eos_index = params.eos_index
         self.pad_index = params.pad_index
         self.batch_size = params.batch_size
@@ -93,11 +93,11 @@ class Dataset(object):
         self.pos = pos
         self.lengths = self.pos[:, 1] - self.pos[:, 0]
 
+        # Set RNG
+        self._rng = np.random.RandomState(seed=params.iter_seed)
+
         # check number of sentences
         assert len(self.pos) == (self.sent == self.eos_index).sum()
-
-        # # remove empty sentences
-        # self.remove_empty_sentences()
 
         # sanity checks
         self.check()
@@ -133,7 +133,6 @@ class Dataset(object):
             sent[lengths[i] - 1, i] = self.eos_index
 
         return sent, lengths
-
 
     def remove_empty_sentences(self):
         """
@@ -190,19 +189,17 @@ class Dataset(object):
 
         for sentence_ids in batches:
             if 0 < self.max_batch_size < len(sentence_ids):
-                np.random.shuffle(sentence_ids)
+                self._rng.shuffle(sentence_ids)
                 sentence_ids = sentence_ids[:self.max_batch_size]
             pos = self.pos[sentence_ids]
             sent = [self.sent[a:b] for a, b in pos]
             sent = self.batch_sentences(sent)
             yield (sent, sentence_ids) if return_indices else sent
 
-    def get_iterator(self, shuffle, group_by_size=False, n_sentences=-1, seed=None, return_indices=False):
+    def get_iterator(self, shuffle, group_by_size=False, n_sentences=-1, return_indices=False):
         """
         Return a sentences iterator.
         """
-        assert seed is None or shuffle is True and type(seed) is int
-        rng = np.random.RandomState(seed)
         n_sentences = len(self.pos) if n_sentences == -1 else n_sentences
         assert 0 < n_sentences <= len(self.pos)
         assert type(shuffle) is bool and type(group_by_size) is bool
@@ -213,7 +210,7 @@ class Dataset(object):
 
         # select sentences to iterate over
         if shuffle:
-            indices = rng.permutation(len(self.pos))[:n_sentences]
+            indices = self._rng.permutation(len(self.pos))[:n_sentences]
         else:
             indices = np.arange(n_sentences)
 
@@ -233,12 +230,11 @@ class Dataset(object):
 
         # optionally shuffle batches
         if shuffle:
-            rng.shuffle(batches)
+            self._rng.shuffle(batches)
 
         # sanity checks
         assert n_sentences == sum([len(x) for x in batches])
         assert lengths[indices].sum() == sum([lengths[x].sum() for x in batches])
-        # assert set.union(*[set(x.tolist()) for x in batches]) == set(range(n_sentences))  # slow
 
         # return the iterator
         return self.get_batches_iterator(batches, return_indices)
@@ -261,9 +257,8 @@ class ParallelDataset(Dataset):
         self.lengths1 = self.pos1[:, 1] - self.pos1[:, 0]
         self.lengths2 = self.pos2[:, 1] - self.pos2[:, 0]
 
-        # check number of sentences
-        #assert len(self.pos1) == (self.sent1 == self.eos_index).sum()
-        #assert len(self.pos2) == (self.sent2 == self.eos_index).sum()
+        # Set RNG
+        self._rng = np.random.RandomState(seed=params.iter_seed)
 
         # remove empty sentences
         self.remove_empty_sentences()
@@ -357,7 +352,7 @@ class ParallelDataset(Dataset):
 
         for sentence_ids in batches:
             if 0 < self.max_batch_size < len(sentence_ids):
-                np.random.shuffle(sentence_ids)
+                self._rng.shuffle(sentence_ids)
                 sentence_ids = sentence_ids[:self.max_batch_size]
             pos1 = self.pos1[sentence_ids]
             pos2 = self.pos2[sentence_ids]
@@ -378,7 +373,7 @@ class ParallelDataset(Dataset):
 
         # select sentences to iterate over
         if shuffle:
-            indices = np.random.permutation(len(self.pos1))[:n_sentences]
+            indices = self._rng.permutation(len(self.pos1))[:n_sentences]
         else:
             indices = np.arange(n_sentences)
 
@@ -398,15 +393,15 @@ class ParallelDataset(Dataset):
 
         # optionally shuffle batches
         if shuffle:
-            np.random.shuffle(batches)
+            self._rng.shuffle(batches)
 
         # sanity checks
         assert n_sentences == sum([len(x) for x in batches])
         assert lengths[indices].sum() == sum([lengths[x].sum() for x in batches])
-        # assert set.union(*[set(x.tolist()) for x in batches]) == set(range(n_sentences))  # slow
 
         # return the iterator
         return self.get_batches_iterator(batches, return_indices)
+
 
 class ParallelDatasetWithRegions(Dataset):
 
@@ -416,7 +411,6 @@ class ParallelDatasetWithRegions(Dataset):
         self.batch_size = params.batch_size
         self.tokens_per_batch = params.tokens_per_batch
         self.max_batch_size = params.max_batch_size
-        # self.image_feats = np.array(image_feats)
         self.sent1 = sent1
         self.sent2 = sent2
         self.pos1 = pos1
@@ -432,9 +426,8 @@ class ParallelDatasetWithRegions(Dataset):
             self.masked_tokens = None
             self.masked_object_labels = None
 
-        # # check number of sentences
-        # assert len(self.pos1) == (self.sent1 == self.eos_index).sum()
-        # assert len(self.pos2) == (self.sent2 == self.eos_index).sum()
+        # Set RNG
+        self._rng = np.random.RandomState(seed=params.iter_seed)
 
         # remove empty sentences
         self.remove_empty_sentences()
@@ -447,7 +440,6 @@ class ParallelDatasetWithRegions(Dataset):
         Number of sentences in the dataset.
         """
         return len(self.pos1)
-
 
     def check(self):
         """
@@ -534,15 +526,13 @@ class ParallelDatasetWithRegions(Dataset):
         masked_tokens, masked_object_id = None, None
         for sentence_ids in batches:
             if 0 < self.max_batch_size < len(sentence_ids):
-                np.random.shuffle(sentence_ids)
+                self._rng.shuffle(sentence_ids)
                 sentence_ids = sentence_ids[:self.max_batch_size]
 
             image_name_with_indices = zip(sentence_ids, self.image_names[sentence_ids])
             image_features, good_indices = self.load_images(self.region_features_path, image_name_with_indices)
             image_scores = self.batch_images(image_features, feat_type="detection_scores")
             img_all_dict = image_features
-            # img_all_dict = self.image_feats[sentence_ids]
-            # print("length of image dict: ", len(img_all_dict))
             pos1 = self.pos1[good_indices]
             pos2 = self.pos2[good_indices]
             sent1 = self.batch_sentences([self.sent1[a:b] for a, b in pos1])
@@ -550,9 +540,11 @@ class ParallelDatasetWithRegions(Dataset):
             if self.masked_tokens is not None and self.masked_object_labels is not None:
                 masked_tokens = self.masked_tokens[good_indices]
                 masked_object_id = self.masked_object_labels[good_indices]
-            yield (sent1, sent2, image_scores, img_all_dict, masked_tokens, masked_object_id, sentence_ids) if return_indices else (sent1, sent2,
-                                                                                                     image_scores,
-                                                                                                     img_all_dict,masked_tokens, masked_object_id)
+
+            if return_indices:
+                yield (sent1, sent2, image_scores, img_all_dict, masked_tokens, masked_object_id, sentence_ids)
+            else:
+                yield (sent1, sent2, image_scores, img_all_dict, masked_tokens, masked_object_id)
 
     def get_iterator(self, shuffle, group_by_size=False, n_sentences=-1, return_indices=False):
         """
@@ -567,7 +559,7 @@ class ParallelDatasetWithRegions(Dataset):
 
         # select sentences to iterate over
         if shuffle:
-            indices = np.random.permutation(len(self.pos1))[:n_sentences]
+            indices = self._rng.permutation(len(self.pos1))[:n_sentences]
         else:
             indices = np.arange(n_sentences)
 
@@ -587,12 +579,11 @@ class ParallelDatasetWithRegions(Dataset):
 
         # optionally shuffle batches
         if shuffle:
-            np.random.shuffle(batches)
+            self._rng.shuffle(batches)
 
         # sanity checks
         assert n_sentences == sum([len(x) for x in batches])
         assert lengths[indices].sum() == sum([lengths[x].sum() for x in batches])
-        # assert set.union(*[set(x.tolist()) for x in batches]) == set(range(n_sentences))  # slow
 
         # return the iterator
         return self.get_batches_iterator(batches, return_indices)
@@ -613,8 +604,6 @@ class ParallelDatasetWithRegions(Dataset):
                 imgs[0:lengths[i], i].copy_(torch.from_numpy(feat.astype(np.int64)))
                 # imgs[lengths[i] - 1, i] = self.eor_index
             except Exception as e:
-                #print(feat.shape)
-                #print(lengths[i], len(lengths[i]))
                 print(e)
         return imgs, lengths
 
@@ -634,14 +623,15 @@ class ParallelDatasetWithRegions(Dataset):
                         with open("empty_files.txt", "a") as f:
                             f.write(f_name + "\n")
                             print('File is empty')
-            except:
+            except Exception:
                 print(f'Cannot load {image_name}')
 
         return img_data, good_indices
 
+
 class DatasetWithRegions(object):
 
-    def __init__(self, sent, pos, image_names,masked_tokens, masked_object_labels, params):
+    def __init__(self, sent, pos, image_names, masked_tokens, masked_object_labels, params):
 
         self.eos_index = params.eos_index
         self.pad_index = params.pad_index
@@ -663,6 +653,9 @@ class DatasetWithRegions(object):
         # check number of sentences
         assert len(self.pos) == (self.sent == self.eos_index).sum()
 
+        # Set RNG
+        self._rng = np.random.RandomState(seed=params.iter_seed)
+
         # # remove empty sentences
         self.remove_empty_sentences()
         # sanity checks
@@ -680,8 +673,7 @@ class DatasetWithRegions(object):
         """
         eos = self.eos_index
         assert len(self.pos) == (self.sent[self.pos[:, 1]] == eos).sum()  # check sentences indices
-        # assert self.lengths.min() > 0
-        # check empty sentences
+
     def remove_empty_sentences(self):
         """
         Remove empty sentences.
@@ -696,6 +688,7 @@ class DatasetWithRegions(object):
 
         logger.info("Removed %i empty sentences." % (init_size - len(indices)))
         self.check()
+
     def batch_sentences(self, sentences):
         """
         Take as input a list of n sentences (torch.LongTensor vectors) and return
@@ -762,23 +755,23 @@ class DatasetWithRegions(object):
         masked_tokens, masked_object_id = None, None
         for sentence_ids in batches:
             if 0 < self.max_batch_size < len(sentence_ids):
-                np.random.shuffle(sentence_ids)
+                self._rng.shuffle(sentence_ids)
                 sentence_ids = sentence_ids[:self.max_batch_size]
 
             image_name_with_indices = zip(sentence_ids, self.image_names[sentence_ids])
             image_features, good_indices = self.load_images(self.region_features_path, image_name_with_indices)
             image_scores = self.batch_images(image_features, feat_type="detection_scores")
             img_all_dict = image_features
-            # img_all_dict = self.image_feats[sentence_ids]
-            # print("length of image dict: ", len(img_all_dict))
             pos = self.pos[good_indices]
             sent = self.batch_sentences([self.sent[a:b] for a, b in pos])
             if self.masked_tokens is not None and self.masked_object_labels is not None:
                 masked_tokens = self.masked_tokens[good_indices]
                 masked_object_id = self.masked_object_labels[good_indices]
-            yield (sent, image_scores, img_all_dict, masked_tokens, masked_object_id,
-                   sentence_ids) if return_indices else (sent,
-                                                         image_scores,img_all_dict,masked_tokens,masked_object_id)
+
+            if return_indices:
+                yield (sent, image_scores, img_all_dict, masked_tokens, masked_object_id, sentence_ids)
+            else:
+                yield (sent, image_scores, img_all_dict, masked_tokens, masked_object_id)
 
     def get_iterator(self, shuffle, group_by_size=False, n_sentences=-1, return_indices=False):
         """
@@ -793,7 +786,7 @@ class DatasetWithRegions(object):
 
         # select sentences to iterate over
         if shuffle:
-            indices = np.random.permutation(len(self.pos))[:n_sentences]
+            indices = self._rng.permutation(len(self.pos))[:n_sentences]
         else:
             indices = np.arange(n_sentences)
 
@@ -813,15 +806,15 @@ class DatasetWithRegions(object):
 
         # optionally shuffle batches
         if shuffle:
-            np.random.shuffle(batches)
+            self._rng.shuffle(batches)
 
         # sanity checks
         assert n_sentences == sum([len(x) for x in batches])
         assert lengths[indices].sum() == sum([lengths[x].sum() for x in batches])
-        # assert set.union(*[set(x.tolist()) for x in batches]) == set(range(n_sentences))  # slow
 
         # return the iterator
         return self.get_batches_iterator(batches, return_indices)
+
     def batch_images(self, images, feat_type):
         """
         Take as input a list of n sentences (torch.LongTensor vectors) and return
@@ -838,12 +831,10 @@ class DatasetWithRegions(object):
                 imgs[0:lengths[i], i].copy_(torch.from_numpy(feat.astype(np.int64)))
                 # imgs[lengths[i] - 1, i] = self.eor_index
             except Exception as e:
-                #print(feat.shape)
-                #print(lengths[i], len(lengths[i]))
                 print(e)
         return imgs, lengths
-    def load_images(self, region_features_path, image_name_with_indices):
 
+    def load_images(self, region_features_path, image_name_with_indices):
         img_data = []
         good_indices = []
         for ind, image_name in image_name_with_indices:
@@ -858,7 +849,7 @@ class DatasetWithRegions(object):
                         with open("empty_files.txt", "a") as f:
                             f.write(f_name + "\n")
                             print('File is empty')
-            except:
-                    pass
+            except Exception:
+                print(f'Cannot load {image_name}')
 
         return img_data, good_indices
