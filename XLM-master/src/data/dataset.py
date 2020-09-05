@@ -601,7 +601,7 @@ class ParallelDatasetWithRegions(Dataset):
         for i, img in enumerate(images):
             feat = img[feat_type]
             try:
-                imgs[0:lengths[i], i].copy_(torch.from_numpy(feat.astype(np.int64)))
+                imgs[0:lengths[i], i].copy_(torch.from_numpy(feat))
                 # imgs[lengths[i] - 1, i] = self.eor_index
             except Exception as e:
                 print(e)
@@ -828,7 +828,7 @@ class DatasetWithRegions(object):
         for i, img in enumerate(images):
             feat = img[feat_type]
             try:
-                imgs[0:lengths[i], i].copy_(torch.from_numpy(feat.astype(np.int64)))
+                imgs[0:lengths[i], i].copy_(torch.from_numpy(feat))
                 # imgs[lengths[i] - 1, i] = self.eor_index
             except Exception as e:
                 print(e)
