@@ -40,6 +40,7 @@ def get_parser():
                         help="Save the model periodically (0 to disable)")
     parser.add_argument("--exp_id", type=str, default="",
                         help="Experiment ID")
+    # NOTE: --weight_seed unused as of now
     parser.add_argument("--weight_seed", type=int, default=-1,
                         help="Random seed for weight init (-1 for non-determinism).")
     parser.add_argument("--iter_seed", type=int, default=12345,
