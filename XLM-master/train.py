@@ -254,6 +254,17 @@ def main(params):
     # initialize SLURM signal handler for time limit / pre-emption
     init_signal_handler()
 
+    if params.other_seed > -1:
+        # deterministic
+        torch.manual_seed(params.other_seed)
+        torch.cuda.manual_seed(params.other_seed)
+        np.random.seed(params.other_seed)
+        random.seed(params.other_seed)
+
+    if params.iter_seed == -1:
+        # non-deterministic
+        params.iter_seed = None
+
     # load data
     data = load_data(params)
     writer = SummaryWriter(params.dump_path + "/" + params.exp_name + "_log")
@@ -355,17 +366,6 @@ if __name__ == '__main__':
         params.exp_id = 'debug_%08i' % random.randint(0, 100000000)
         params.debug_slurm = True
         params.debug_train = True
-
-    if params.other_seed > -1:
-        # deterministic
-        torch.manual_seed(params.other_seed)
-        torch.cuda.manual_seed(params.other_seed)
-        np.random.seed(params.other_seed)
-        random.seed(params.other_seed)
-
-    if params.iter_seed == -1:
-        # non-deterministic
-        params.iter_seed = None
 
     # check parameters
     check_data_params(params)
