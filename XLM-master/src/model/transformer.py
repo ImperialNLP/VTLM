@@ -14,8 +14,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ..utils import get_image_properties
-from torch.autograd import Variable
-
 
 
 N_MAX_POSITIONS = 512  # maximum input sequence length
@@ -102,6 +100,7 @@ def get_masks(slen, lengths, causal):
 
     return mask, attn_mask
 
+
 class ImgPredLayer(nn.Module):
     """
     Prediction layer (cross_entropy or adaptive_softmax).
@@ -114,7 +113,7 @@ class ImgPredLayer(nn.Module):
         dim = params.emb_dim
 
         if params.asm is False:
-            self.proj = Linear(dim, params.num_of_classes , bias=True)
+            self.proj = Linear(dim, params.num_of_classes, bias=True)
         else:
             self.proj = nn.AdaptiveLogSoftmaxWithLoss(
                 in_features=dim,
@@ -260,7 +259,7 @@ class MultiHeadAttention(nn.Module):
         context = torch.matmul(weights, v)                                    # (bs, n_heads, qlen, dim_per_head)
         context = unshape(context)                                            # (bs, qlen, dim)
         if self.return_att_weights:
-            return self.out_lin(context),weights
+            return self.out_lin(context), weights
         else:
 
             return self.out_lin(context)
@@ -283,34 +282,36 @@ class TransformerFFN(nn.Module):
         x = F.dropout(x, p=self.dropout, training=self.training)
         return x
 
+
 class Projector(nn.Module):
     def __init__(self, params):
         super().__init__()
-        self.linear = nn.Linear(1536,params.emb_dim)
+        self.linear = nn.Linear(1536, params.emb_dim)
+
     def forward(self, input):
         # expects (batch_size,36,8,8,1586)
-        x = input.reshape(input.shape[0], input.shape[1],-1)
-        x = Variable(torch.from_numpy(x)).cuda()
+        x = input.reshape(input.shape[0], input.shape[1], -1)
+        x = torch.from_numpy(x).cuda()
         x = self.linear(x)
         return F.relu(x)
+
 
 class RegionalEncodings(nn.Module):
     def __init__(self, params):
         super().__init__()
-        self.linear = nn.Linear(4,params.emb_dim)
-    def forward(self, input):
+        self.linear = nn.Linear(4, params.emb_dim)
 
-        x = Variable(torch.from_numpy(input)).cuda()
+    def forward(self, input):
+        x = torch.from_numpy(input).cuda()
         x = self.linear(x)
         return F.relu(x)
-
 
 
 class TransformerModel(nn.Module):
 
     ATTRIBUTES = ['encoder', 'with_output', 'eos_index', 'pad_index', 'n_langs', 'n_words', 'dim', 'n_layers', 'n_heads', 'hidden_dim', 'dropout', 'attention_dropout', 'asm', 'asm_cutoffs', 'asm_div_value']
 
-    def __init__(self, params, dico, is_encoder, with_output,return_att_weights=False):
+    def __init__(self, params, dico, is_encoder, with_output, return_att_weights=False):
         """
         Transformer model (encoder or decoder).
         """
@@ -400,7 +401,7 @@ class TransformerModel(nn.Module):
     def fwd(self, x, lengths, causal,
             src_enc=None, src_len=None,
             positions=None, langs=None, image_langs=None, cache=None,
-            image_regions = None, box_coordinates = None, img_dict = None):
+            image_regions=None, box_coordinates=None, img_dict=None):
         """
         Inputs:
             `x` LongTensor(slen, bs), containing word indices
@@ -480,14 +481,14 @@ class TransformerModel(nn.Module):
             # image_regions = torch.cat((bor_emb.unsqueeze(1),image_regions,eor_emb.unsqueeze(1)),dim=1)
 
             image_regions = image_regions + self.lang_embeddings(image_langs)
-            tensor = torch.cat((tensor,image_regions), dim=1)
+            tensor = torch.cat((tensor, image_regions), dim=1)
 
         # transformer layers
         for i in range(self.n_layers):
 
             # self attention
             if self.return_att_weights:
-                attn,weights = self.attentions[i](tensor, attn_mask, cache=cache)
+                attn, weights = self.attentions[i](tensor, attn_mask, cache=cache)
             else:
                 attn = self.attentions[i](tensor, attn_mask, cache=cache)
 
@@ -847,4 +848,3 @@ class BeamHypotheses(object):
             return True
         else:
             return self.worst_score >= best_sum_logprobs / self.max_len ** self.length_penalty
-
