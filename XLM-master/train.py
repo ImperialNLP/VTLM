@@ -41,6 +41,8 @@ def get_parser():
                         help="Experiment name")
     parser.add_argument("--save_periodic", type=int, default=0,
                         help="Save the model periodically (0 to disable)")
+    parser.add_argument("--save_initial", type=bool, default=False,
+                        help="Save the initial random weights for debugging.")
     parser.add_argument("--exp_id", type=str, default="",
                         help="Experiment ID")
     parser.add_argument("--other_seed", type=int, default=-1,
@@ -302,7 +304,8 @@ def main(params):
     _iter = 0
 
     # dump initial weights
-    trainer.save_checkpoint('initial', include_optimizers=False)
+    if params.save_initial:
+        trainer.save_checkpoint('initial', include_optimizers=False)
 
     # language model training
     for _ in range(params.max_epoch):
