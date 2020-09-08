@@ -768,7 +768,7 @@ class Trainer(object):
                 if self.params.multi_gpu and 'SLURM_JOB_ID' in os.environ:
                     os.system('scancel ' + os.environ['SLURM_JOB_ID'])
                 sys.exit()
-        self.save_checkpoint('checkpoint', include_optimizers=True)
+        #self.save_checkpoint('checkpoint', include_optimizers=True)
         self.epoch += 1
 
     def round_batch(self, x, lengths, positions, langs):
