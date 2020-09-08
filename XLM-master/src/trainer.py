@@ -112,13 +112,13 @@ class Trainer(object):
         if 'para' in data:
             self.stats = OrderedDict(
                 [('processed_s', 0), ('processed_w', 0)] +
-                [('CLM-%s' % l, []) for l in params.langs] +
+                [('CLM-%s' % ll, []) for ll in params.langs] +
                 [('CLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
                 [('CLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
-                [('MLM-%s' % l, []) for l in params.langs] +
+                [('MLM-%s' % ll, []) for ll in params.langs] +
                 [('MLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
                 [('MLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
-                [('VLM-%s' % l, []) for l in params.langs] +
+                [('VLM-%s' % ll, []) for ll in params.langs] +
                 [('VLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
                 [('VLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
                 [('PC-%s-%s' % (l1, l2), []) for l1, l2 in params.pc_steps] +
@@ -130,9 +130,9 @@ class Trainer(object):
         else:
             self.stats = OrderedDict(
                 [('processed_s', 0), ('processed_w', 0)] +
-                [('CLM-%s' % l, []) for l in params.langs] +
-                [('MLM-%s' % l, []) for l in params.langs] +
-                [('VLM-%s' % l, []) for l in params.langs] +
+                [('CLM-%s' % ll, []) for ll in params.langs] +
+                [('MLM-%s' % ll, []) for ll in params.langs] +
+                [('VLM-%s' % ll, []) for ll in params.langs] +
                 [('PC-%s-%s' % (l1, l2), []) for l1, l2 in params.pc_steps] +
                 [('AE-%s' % lang, []) for lang in params.ae_steps] +
                 [('MT-%s-%s' % (l1, l2), []) for l1, l2 in params.mt_steps] +
@@ -154,8 +154,13 @@ class Trainer(object):
         self.parameters = {}
         named_params = []
         for name in self.MODEL_NAMES:
-            named_params.extend([(k, p) for k, p in getattr(self, name).named_parameters() if p.requires_grad])
+            for k, p in getattr(self, name).named_parameters():
+                if p.requires_grad:
+                    named_params.append([k, p])
+                else:
+                    logger.info(f'`requires_grad=False` for parameter {k!r}')
 
+        logger.info(f'MODEL_NAMES: {self.MODEL_NAMES!r}')
         self.parameters['model'] = [p for k, p in named_params]
 
         # log
@@ -216,7 +221,12 @@ class Trainer(object):
             for optimizer in optimizers:
                 optimizer.zero_grad()
             loss.backward()
-            if params.clip_grad_norm > 0:
+            if params.grad_l2_norm:
+                # NOTE: Experimental (ozan)
+                for name in names:
+                    for p in filter(lambda x: x.grad is not None, self.parameters[name]):
+                        p.grad.data.div_(p.grad.data.norm(2))
+            elif params.clip_grad_norm > 0:
                 for name in names:
                     # norm_check_a = (sum([p.grad.norm(p=2).item() ** 2 for p in self.parameters[name]])) ** 0.5
                     clip_grad_norm_(self.parameters[name], params.clip_grad_norm)
@@ -384,12 +394,12 @@ class Trainer(object):
             x = next(iterator)
         return x if lang2 is None or lang1 < lang2 else x[::-1]
 
-    def word_shuffle(self, x, l):
+    def word_shuffle(self, x, ll):
         """
         Randomly shuffle input words.
         """
         if self.params.word_shuffle == 0:
-            return x, l
+            return x, ll
 
         # define noise word scores
         noise = np.random.uniform(0, self.params.word_shuffle, size=(x.size(0) - 1, x.size(1)))
@@ -397,33 +407,33 @@ class Trainer(object):
 
         assert self.params.word_shuffle > 1
         x2 = x.clone()
-        for i in range(l.size(0)):
+        for i in range(ll.size(0)):
             # generate a random permutation
-            scores = np.arange(l[i] - 1) + noise[:l[i] - 1, i]
+            scores = np.arange(ll[i] - 1) + noise[:ll[i] - 1, i]
             permutation = scores.argsort()
             # shuffle words
-            x2[:l[i] - 1, i].copy_(x2[:l[i] - 1, i][torch.from_numpy(permutation)])
-        return x2, l
+            x2[:ll[i] - 1, i].copy_(x2[:ll[i] - 1, i][torch.from_numpy(permutation)])
+        return x2, ll
 
-    def word_dropout(self, x, l):
+    def word_dropout(self, x, ll):
         """
         Randomly drop input words.
         """
         if self.params.word_dropout == 0:
-            return x, l
+            return x, ll
         assert 0 < self.params.word_dropout < 1
 
         # define words to drop
         eos = self.params.eos_index
-        assert (x[0] == eos).sum() == l.size(0)
+        assert (x[0] == eos).sum() == ll.size(0)
         keep = np.random.rand(x.size(0) - 1, x.size(1)) >= self.params.word_dropout
         keep[0] = 1  # do not drop the start sentence symbol
 
         sentences = []
         lengths = []
-        for i in range(l.size(0)):
-            assert x[l[i] - 1, i] == eos
-            words = x[:l[i] - 1, i].tolist()
+        for i in range(ll.size(0)):
+            assert x[ll[i] - 1, i] == eos
+            words = x[:ll[i] - 1, i].tolist()
             # randomly drop words from the input
             new_s = [w for j, w in enumerate(words) if keep[j, i]]
             # we need to have at least one word in the sentence (more than the start / end sentence symbols)
@@ -440,34 +450,34 @@ class Trainer(object):
             x2[:l2[i], i].copy_(torch.LongTensor(sentences[i]))
         return x2, l2
 
-    def word_blank(self, x, l):
+    def word_blank(self, x, ll):
         """
         Randomly blank input words.
         """
         if self.params.word_blank == 0:
-            return x, l
+            return x, ll
         assert 0 < self.params.word_blank < 1
 
         # define words to blank
         eos = self.params.eos_index
-        assert (x[0] == eos).sum() == l.size(0)
+        assert (x[0] == eos).sum() == ll.size(0)
         keep = np.random.rand(x.size(0) - 1, x.size(1)) >= self.params.word_blank
         keep[0] = 1  # do not blank the start sentence symbol
 
         sentences = []
-        for i in range(l.size(0)):
-            assert x[l[i] - 1, i] == eos
-            words = x[:l[i] - 1, i].tolist()
+        for i in range(ll.size(0)):
+            assert x[ll[i] - 1, i] == eos
+            words = x[:ll[i] - 1, i].tolist()
             # randomly blank words from the input
             new_s = [w if keep[j, i] else self.params.mask_index for j, w in enumerate(words)]
             new_s.append(eos)
-            assert len(new_s) == l[i] and new_s[0] == eos and new_s[-1] == eos
+            assert len(new_s) == ll[i] and new_s[0] == eos and new_s[-1] == eos
             sentences.append(new_s)
         # re-construct input
-        x2 = torch.LongTensor(l.max(), l.size(0)).fill_(self.params.pad_index)
-        for i in range(l.size(0)):
-            x2[:l[i], i].copy_(torch.LongTensor(sentences[i]))
-        return x2, l
+        x2 = torch.LongTensor(ll.max(), ll.size(0)).fill_(self.params.pad_index)
+        for i in range(ll.size(0)):
+            x2[:ll[i], i].copy_(torch.LongTensor(sentences[i]))
+        return x2, ll
 
     def add_noise(self, words, lengths):
         """
@@ -636,14 +646,13 @@ class Trainer(object):
                                                                               params.pad_index,
                                                                               params.eos_index, reset_positions=True)
         else:
-            (x, len1), (img, len_img), (img_dict), (masked_tokens), (masked_object_ids) = self.get_batch_vpara(name,lang1,lang2)
+            (x, len1), (img, len_img), (img_dict), (masked_tokens), (masked_object_ids) = self.get_batch_vpara(name, lang1, lang2)
             image_langs = img.new(len_img.max().item(), len1.size(0)).fill_(params.lang2id["img"])
             langs = x.clone().fill_(lang1_id)
             positions = None
             lengths = len1
 
         return x, lengths, positions, langs, image_langs, img_dict, masked_object_ids, masked_tokens, (None, None)
-
 
     def save_checkpoint(self, name, include_optimizers=True):
         """
