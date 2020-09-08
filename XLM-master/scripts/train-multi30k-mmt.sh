@@ -15,7 +15,7 @@ CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 python $TRAIN --beam_size 1 --exp_name mmt_lr0.0001 --dump_path ${DUMP_PATH} \
   --data_path ${DATA_PATH} --encoder_only false \
   --lgs 'en-de' --mmt_step "en-de" --emb_dim 512 --n_layers 6 --n_heads 8 \
-  --dropout '0.2' --attention_dropout '0.1' --gelu_activation true \
+  --dropout '0.4' --attention_dropout '0.1' --gelu_activation true \
   --batch_size 64 --optimizer "adam,lr=0.0001" \
   --epoch_size ${EPOCH} --eval_bleu true --max_epoch 500 \
   --stopping_criterion 'valid_en-de_mmt_bleu,20' --validation_metrics 'valid_en-de_mmt_bleu' \
