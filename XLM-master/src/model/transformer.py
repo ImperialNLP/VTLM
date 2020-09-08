@@ -286,25 +286,27 @@ class TransformerFFN(nn.Module):
 class Projector(nn.Module):
     def __init__(self, params):
         super().__init__()
+        self.relu = params.visual_relu
         self.linear = nn.Linear(1536, params.emb_dim)
 
     def forward(self, input):
         # expects (batch_size,36,8,8,1586)
-        x = input.reshape(input.shape[0], input.shape[1], -1)
-        x = torch.from_numpy(x).cuda()
+        #x = input.reshape(input.shape[0], input.shape[1], -1)
+        x = torch.from_numpy(input).cuda()
         x = self.linear(x)
-        return F.relu(x)
+        return F.relu(x) if self.relu else x
 
 
 class RegionalEncodings(nn.Module):
     def __init__(self, params):
         super().__init__()
+        self.relu = params.visual_relu
         self.linear = nn.Linear(4, params.emb_dim)
 
     def forward(self, input):
         x = torch.from_numpy(input).cuda()
         x = self.linear(x)
-        return F.relu(x)
+        return F.relu(x) if self.relu else x
 
 
 class TransformerModel(nn.Module):
@@ -356,6 +358,10 @@ class TransformerModel(nn.Module):
             self.lang_embeddings = Embedding(self.n_langs, self.dim)
         self.embeddings = Embedding(self.n_words, self.dim, padding_idx=self.pad_index)
         self.layer_norm_emb = nn.LayerNorm(self.dim, eps=1e-12)
+
+        self.layer_norm_vis = lambda x: x
+        if params.visual_lnorm:
+            self.layer_norm_vis = nn.LayerNorm(self.dim, eps=1e-12)
 
         # transformer layers
         self.attentions = nn.ModuleList()
@@ -469,19 +475,23 @@ class TransformerModel(nn.Module):
 
             img_mask = torch.ones([mask.shape[0], self.num_of_regions]).type_as(mask)
             img_attn_mask = torch.ones([mask.shape[0], self.num_of_regions]).type_as(mask)
+
             mask = torch.cat((mask, img_mask), dim=1)
             attn_mask = torch.cat((attn_mask, img_attn_mask), dim=1)
-            # detection_classes
-            image_regions = self.projector(get_image_properties(img_dict, "detection_features"))
-            regional_encodings = self.regional_encodings(get_image_properties(img_dict, "detection_boxes"))
-            image_regions += regional_encodings
+
+            feats = self.projector(
+                get_image_properties(img_dict, "detection_features"))
+            reg_enc = self.regional_encodings(
+                get_image_properties(img_dict, "detection_boxes"))
+            feats = feats + reg_enc + self.lang_embeddings(image_langs)
+            feats = self.layer_norm_vis(feats)
+            feats = F.dropout(tensor, p=self.dropout, training=self.training)
 
             # bor_emb = self.embeddings(torch.Tensor(1).long().cuda()).repeat(tensor.shape[0], 1)
             # eor_emb = self.embeddings(torch.Tensor(1).long().cuda()).repeat(tensor.shape[0], 1)
             # image_regions = torch.cat((bor_emb.unsqueeze(1),image_regions,eor_emb.unsqueeze(1)),dim=1)
 
-            image_regions = image_regions + self.lang_embeddings(image_langs)
-            tensor = torch.cat((tensor, image_regions), dim=1)
+            tensor = torch.cat((tensor, feats), dim=1)
 
         # transformer layers
         for i in range(self.n_layers):
