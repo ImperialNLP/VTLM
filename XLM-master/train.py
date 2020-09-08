@@ -73,6 +73,10 @@ def get_parser():
                         help="Dropout in the attention layer")
     parser.add_argument("--gelu_activation", type=bool_flag, default=False,
                         help="Use a GELU activation instead of ReLU")
+    parser.add_argument("--visual_relu", type=bool_flag, default=True,
+                        help="Use ReLU for visual feature projections.")
+    parser.add_argument("--visual_lnorm", type=bool_flag, default=False,
+                        help="Use LayerNorm for visual pathway.")
     parser.add_argument("--share_inout_emb", type=bool_flag, default=True,
                         help="Share input and output embeddings")
     parser.add_argument("--sinusoidal_embeddings", type=bool_flag, default=False,
@@ -149,6 +153,8 @@ def get_parser():
                         help="Optimizer (SGD / RMSprop / Adam, etc.)")
     parser.add_argument("--clip_grad_norm", type=float, default=5,
                         help="Clip gradients norm (0 to disable)")
+    parser.add_argument("--grad_l2_norm", type=bool, default=False,
+                        help="L2 normalize gradients.")
     parser.add_argument("--epoch_size", type=int, default=100000,
                         help="Epoch size / evaluation frequency (-1 for parallel data size)")
     parser.add_argument("--max_epoch", type=int, default=100000,
