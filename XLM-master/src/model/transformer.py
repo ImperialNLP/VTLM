@@ -49,14 +49,6 @@ def Embedding(num_embeddings, embedding_dim, padding_idx=None):
     return m
 
 
-def Linear(in_features, out_features, bias=True):
-    m = nn.Linear(in_features, out_features, bias)
-    # nn.init.normal_(m.weight, mean=0, std=1)
-    # nn.init.xavier_uniform_(m.weight)
-    # nn.init.constant_(m.bias, 0.)
-    return m
-
-
 def create_sinusoidal_embeddings(n_pos, dim, out):
     position_enc = np.array([
         [pos / np.power(10000, 2 * (j // 2) / dim) for j in range(dim)]
@@ -66,17 +58,6 @@ def create_sinusoidal_embeddings(n_pos, dim, out):
     out[:, 1::2] = torch.FloatTensor(np.cos(position_enc[:, 1::2]))
     out.detach_()
     out.requires_grad = False
-
-
-def gelu(x):
-    """
-    GELU activation (used if Pytorch does not provide one)
-    https://arxiv.org/abs/1606.08415
-    https://github.com/huggingface/pytorch-openai-transformer-lm/blob/master/model_pytorch.py#L14
-    https://github.com/huggingface/pytorch-pretrained-BERT/blob/master/modeling.py
-    """
-    # return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
-    return 0.5 * x * (1.0 + torch.erf(x / math.sqrt(2.0)))
 
 
 def get_masks(slen, lengths, causal):
@@ -113,7 +94,7 @@ class ImgPredLayer(nn.Module):
         dim = params.emb_dim
 
         if params.asm is False:
-            self.proj = Linear(dim, params.num_of_classes, bias=True)
+            self.proj = nn.Linear(dim, params.num_of_classes, bias=True)
         else:
             self.proj = nn.AdaptiveLogSoftmaxWithLoss(
                 in_features=dim,
@@ -156,7 +137,7 @@ class PredLayer(nn.Module):
         dim = params.emb_dim
 
         if params.asm is False:
-            self.proj = Linear(dim, params.n_words, bias=True)
+            self.proj = nn.Linear(dim, params.n_words, bias=True)
         else:
             self.proj = nn.AdaptiveLogSoftmaxWithLoss(
                 in_features=dim,
@@ -201,10 +182,10 @@ class MultiHeadAttention(nn.Module):
         self.return_att_weights = return_att_weights
         assert self.dim % self.n_heads == 0
 
-        self.q_lin = Linear(dim, dim)
-        self.k_lin = Linear(dim, dim)
-        self.v_lin = Linear(dim, dim)
-        self.out_lin = Linear(dim, dim)
+        self.q_lin = nn.Linear(dim, dim)
+        self.k_lin = nn.Linear(dim, dim)
+        self.v_lin = nn.Linear(dim, dim)
+        self.out_lin = nn.Linear(dim, dim)
 
     def forward(self, input, mask, kv=None, cache=None):
         """
@@ -270,10 +251,9 @@ class TransformerFFN(nn.Module):
     def __init__(self, in_dim, dim_hidden, out_dim, dropout, gelu_activation):
         super().__init__()
         self.dropout = dropout
-        self.lin1 = Linear(in_dim, dim_hidden)
-        self.lin2 = Linear(dim_hidden, out_dim)
-        # if torch has gelu, use that one instead of the custom one
-        self.act = getattr(F, 'gelu', gelu) if gelu_activation else F.relu
+        self.lin1 = nn.Linear(in_dim, dim_hidden)
+        self.lin2 = nn.Linear(dim_hidden, out_dim)
+        self.act = F.gelu if gelu_activation else F.relu
 
     def forward(self, input):
         x = self.lin1(input)
@@ -291,8 +271,8 @@ class Projector(nn.Module):
 
     def forward(self, input):
         # expects (batch_size,36,8,8,1586)
-        #x = input.reshape(input.shape[0], input.shape[1], -1)
-        x = torch.from_numpy(input).cuda()
+        x = input.reshape(input.shape[0], input.shape[1], -1)
+        x = torch.from_numpy(x).cuda()
         x = self.linear(x)
         return F.relu(x) if self.relu else x
 
