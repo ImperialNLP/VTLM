@@ -15,14 +15,14 @@ DUMP_PATH="."
 
 CUR_DIR=`dirname $0`
 TRAIN=`realpath ${CUR_DIR}/../train.py`
-BS=${BS:-1}
+BS=${BS:-8}
 NAME="${CKPT/.pth/}_beam${BS}/"
 
 for TEST_SET in test_2016_flickr test_2017_flickr test_2017_mscoco test_2018_flickr; do
   python $TRAIN --beam_size $BS --exp_name $NAME --exp_id "${TEST_SET}" --dump_path $DUMP_PATH \
     --reload_model "${CKPT},${CKPT}" --data_path "${DATA_PATH}_${TEST_SET}" \
     --encoder_only false --lgs 'en-de' --mt_step "en-de" --emb_dim 512 --n_layers 6 --n_heads 8 \
-    --dropout '0.2' --attention_dropout '0.1' --gelu_activation true \
+    --dropout '0.4' --attention_dropout '0.1' --gelu_activation true \
     --batch_size 64 --optimizer "adam,lr=0.0001" \
     --eval_bleu true --eval_only true $@
 done
