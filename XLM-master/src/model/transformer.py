@@ -459,18 +459,11 @@ class TransformerModel(nn.Module):
             mask = torch.cat((mask, img_mask), dim=1)
             attn_mask = torch.cat((attn_mask, img_attn_mask), dim=1)
 
-            feats = self.projector(
-                get_image_properties(img_dict, "detection_features"))
-            reg_enc = self.regional_encodings(
-                get_image_properties(img_dict, "detection_boxes"))
-            feats = feats + reg_enc + self.lang_embeddings(image_langs)
+            feats = self.projector(get_image_properties(img_dict, "detection_features")) + \
+                    self.regional_encodings(get_image_properties(img_dict, "detection_boxes")) + \
+                    self.lang_embeddings(image_langs)
             feats = self.layer_norm_vis(feats)
-            feats = F.dropout(tensor, p=self.dropout, training=self.training)
-
-            # bor_emb = self.embeddings(torch.Tensor(1).long().cuda()).repeat(tensor.shape[0], 1)
-            # eor_emb = self.embeddings(torch.Tensor(1).long().cuda()).repeat(tensor.shape[0], 1)
-            # image_regions = torch.cat((bor_emb.unsqueeze(1),image_regions,eor_emb.unsqueeze(1)),dim=1)
-
+            feats = F.dropout(feats, p=self.dropout, training=self.training)
             tensor = torch.cat((tensor, feats), dim=1)
 
         # transformer layers
