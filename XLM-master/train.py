@@ -75,6 +75,8 @@ def get_parser():
                         help="Dropout in the attention layer")
     parser.add_argument("--gelu_activation", type=bool_flag, default=False,
                         help="Use a GELU activation instead of ReLU")
+    parser.add_argument("--visual_first", type=bool_flag, default=False,
+                        help="Plug visual features first in the sequence.")
     parser.add_argument("--visual_relu", type=bool_flag, default=True,
                         help="Use ReLU for visual feature projections.")
     parser.add_argument("--visual_lnorm", type=bool_flag, default=False,
