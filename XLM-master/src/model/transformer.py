@@ -173,13 +173,12 @@ class MultiHeadAttention(nn.Module):
 
     NEW_ID = itertools.count()
 
-    def __init__(self, n_heads, dim, dropout, return_att_weights=False):
+    def __init__(self, n_heads, dim, dropout):
         super().__init__()
         self.layer_id = next(MultiHeadAttention.NEW_ID)
         self.dim = dim
         self.n_heads = n_heads
         self.dropout = dropout
-        self.return_att_weights = return_att_weights
         assert self.dim % self.n_heads == 0
 
         self.q_lin = nn.Linear(dim, dim)
@@ -239,11 +238,7 @@ class MultiHeadAttention(nn.Module):
         weights = F.dropout(weights, p=self.dropout, training=self.training)  # (bs, n_heads, qlen, klen)
         context = torch.matmul(weights, v)                                    # (bs, n_heads, qlen, dim_per_head)
         context = unshape(context)                                            # (bs, qlen, dim)
-        if self.return_att_weights:
-            return self.out_lin(context), weights
-        else:
-
-            return self.out_lin(context)
+        return self.out_lin(context), weights
 
 
 class TransformerFFN(nn.Module):
@@ -293,7 +288,7 @@ class TransformerModel(nn.Module):
 
     ATTRIBUTES = ['encoder', 'with_output', 'eos_index', 'pad_index', 'n_langs', 'n_words', 'dim', 'n_layers', 'n_heads', 'hidden_dim', 'dropout', 'attention_dropout', 'asm', 'asm_cutoffs', 'asm_div_value']
 
-    def __init__(self, params, dico, is_encoder, with_output, return_att_weights=False):
+    def __init__(self, params, dico, is_encoder, with_output):
         """
         Transformer model (encoder or decoder).
         """
@@ -304,7 +299,6 @@ class TransformerModel(nn.Module):
         self.is_decoder = not is_encoder
         self.with_output = with_output
 
-        self.return_att_weights = return_att_weights
         # dictionary / languages
         self.n_langs = params.n_langs
         self.n_words = params.n_words
@@ -317,6 +311,7 @@ class TransformerModel(nn.Module):
         self.lang2id = params.lang2id
         self.batch_size = params.batch_size
         self.use_lang_emb = getattr(params, 'use_lang_emb', True)
+        self.visual_first = params.visual_first
         assert len(self.dico) == self.n_words
         assert len(self.id2lang) == len(self.lang2id) == self.n_langs
         self.projector = Projector(params)
@@ -353,8 +348,7 @@ class TransformerModel(nn.Module):
             self.encoder_attn = nn.ModuleList()
 
         for layer_id in range(self.n_layers):
-            self.attentions.append(MultiHeadAttention(self.n_heads, self.dim, dropout=self.attention_dropout,
-                                                      return_att_weights=self.return_att_weights))
+            self.attentions.append(MultiHeadAttention(self.n_heads, self.dim, dropout=self.attention_dropout))
             self.layer_norm1.append(nn.LayerNorm(self.dim, eps=1e-12))
             if self.is_decoder:
                 self.layer_norm15.append(nn.LayerNorm(self.dim, eps=1e-12))
@@ -396,9 +390,6 @@ class TransformerModel(nn.Module):
             `positions` LongTensor(slen, bs), containing word positions
             `langs` LongTensor(slen, bs), containing language IDs
         """
-        # lengths = (x != self.pad_index).float().sum(dim=1)
-        # mask = x != self.pad_index
-
         # check inputs
         slen, bs = x.size()
         # slen = slen + self.num_of_regions
@@ -462,26 +453,25 @@ class TransformerModel(nn.Module):
             feats = F.dropout(feats, p=self.dropout, training=self.training)
 
             # concatenate: put image sequence first
-            mask = torch.cat((img_mask, mask), dim=1)
-            attn_mask = torch.cat((img_attn_mask, attn_mask), dim=1)
-            tensor = torch.cat((feats, tensor), dim=1)
+            if self.visual_first:
+                mask = torch.cat((img_mask, mask), dim=1)
+                attn_mask = torch.cat((img_attn_mask, attn_mask), dim=1)
+                tensor = torch.cat((feats, tensor), dim=1)
+            else:
+                mask = torch.cat((mask, img_mask), dim=1)
+                attn_mask = torch.cat((attn_mask, img_attn_mask), dim=1)
+                tensor = torch.cat((tensor, feats), dim=1)
 
         # transformer layers
         for i in range(self.n_layers):
-
-            # self attention
-            if self.return_att_weights:
-                attn, weights = self.attentions[i](tensor, attn_mask, cache=cache)
-            else:
-                attn = self.attentions[i](tensor, attn_mask, cache=cache)
-
+            attn, _ = self.attentions[i](tensor, attn_mask, cache=cache)
             attn = F.dropout(attn, p=self.dropout, training=self.training)
             tensor = tensor + attn
             tensor = self.layer_norm1[i](tensor)
 
             # encoder attention (for decoder only)
             if self.is_decoder and src_enc is not None:
-                attn = self.encoder_attn[i](tensor, src_mask, kv=src_enc, cache=cache)
+                attn, _ = self.encoder_attn[i](tensor, src_mask, kv=src_enc, cache=cache)
                 attn = F.dropout(attn, p=self.dropout, training=self.training)
                 tensor = tensor + attn
                 tensor = self.layer_norm15[i](tensor)
@@ -568,7 +558,6 @@ class TransformerModel(nn.Module):
         cache = {'slen': 0}
 
         while cur_len < max_len:
-
             # compute word scores
             tensor = self.forward(
                 'fwd',
@@ -579,9 +568,12 @@ class TransformerModel(nn.Module):
                 causal=True,
                 src_enc=src_enc,
                 src_len=src_len,
-                cache=cache
+                cache=cache,
             )
-            assert tensor.size() == (1, bs, self.dim), (cur_len, max_len, src_enc.size(), tensor.size(), (1, bs, self.dim))
+            print(tensor.size())
+            assert tensor.size() == (1, bs, self.dim), \
+                (cur_len, max_len, src_enc.size(), tensor.size(), (1, bs, self.dim))
+
             tensor = tensor.data[-1, :, :].type_as(src_enc)  # (bs, dim)
             scores = self.pred_layer.get_scores(tensor)      # (bs, n_words)
 
@@ -756,15 +748,6 @@ class TransformerModel(nn.Module):
             # stop when we are done with each sentence
             if all(done):
                 break
-
-        # visualize hypotheses
-        # print([len(x) for x in generated_hyps], cur_len)
-        # globals().update( locals() );
-        # !import code; code.interact(local=vars())
-        # for ii in range(bs):
-        #     for ss, ww in sorted(generated_hyps[ii].hyp, key=lambda x: x[0], reverse=True):
-        #         print("%.3f " % ss + " ".join(self.dico[x] for x in ww.tolist()))
-        #     print("")
 
         # select the best hypotheses
         tgt_len = src_len.new(bs)
