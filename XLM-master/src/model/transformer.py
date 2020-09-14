@@ -448,23 +448,23 @@ class TransformerModel(nn.Module):
         tensor = F.dropout(tensor, p=self.dropout, training=self.training)
         tensor *= mask.unsqueeze(-1).to(tensor.dtype)
 
-        # langs = torch.cat((langs.cuda(), image_langs.cuda()))
-
         if img_dict is not None and image_langs is not None:
             image_langs = image_langs.transpose(0, 1)
 
-            img_mask = torch.ones([mask.shape[0], self.num_of_regions]).type_as(mask)
-            img_attn_mask = torch.ones([mask.shape[0], self.num_of_regions]).type_as(mask)
-
-            mask = torch.cat((mask, img_mask), dim=1)
-            attn_mask = torch.cat((attn_mask, img_attn_mask), dim=1)
+            img_mask = mask.new_ones((mask.size(0), self.num_of_regions))
+            img_attn_mask = img_mask.clone()
 
             feats = self.projector(get_image_properties(img_dict, "detection_features")) + \
                     self.regional_encodings(get_image_properties(img_dict, "detection_boxes")) + \
                     self.lang_embeddings(image_langs)
             feats = self.layer_norm_vis(feats)
+
             feats = F.dropout(feats, p=self.dropout, training=self.training)
-            tensor = torch.cat((tensor, feats), dim=1)
+
+            # concatenate: put image sequence first
+            mask = torch.cat((img_mask, mask), dim=1)
+            attn_mask = torch.cat((img_attn_mask, attn_mask), dim=1)
+            tensor = torch.cat((feats, tensor), dim=1)
 
         # transformer layers
         for i in range(self.n_layers):
