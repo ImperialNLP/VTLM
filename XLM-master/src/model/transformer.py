@@ -390,18 +390,20 @@ class TransformerModel(nn.Module):
             `positions` LongTensor(slen, bs), containing word positions
             `langs` LongTensor(slen, bs), containing language IDs
         """
+        x = x.transpose(0, 1)  # batch size as dimension 0
+
         # check inputs
-        slen, bs = x.size()
-        # slen = slen + self.num_of_regions
+        bs, slen = x.size()
 
         assert lengths.size(0) == bs
         assert lengths.max().item() <= slen
-
-        x = x.transpose(0, 1)  # batch size as dimension 0
         assert (src_enc is None) == (src_len is None)
         if src_enc is not None:
             assert self.is_decoder
             assert src_enc.size(0) == bs
+
+        # TODO: Do we need that?
+        # slen = slen + self.num_of_regions
 
         # generate masks
         mask, attn_mask = get_masks(slen, lengths, causal)
@@ -409,6 +411,9 @@ class TransformerModel(nn.Module):
 
         if self.is_decoder and src_enc is not None:
             src_mask = torch.arange(src_len.max(), dtype=torch.long, device=lengths.device) < src_len[:, None]
+        else:
+            # cache is only active for decoder
+            assert cache is None
 
         # positions
         if positions is None:
@@ -479,7 +484,6 @@ class TransformerModel(nn.Module):
             # FFN
             tensor = tensor + self.ffns[i](tensor)
             tensor = self.layer_norm2[i](tensor)
-
             tensor *= mask.unsqueeze(-1).to(tensor.dtype)
 
         # update cache length
@@ -570,7 +574,6 @@ class TransformerModel(nn.Module):
                 src_len=src_len,
                 cache=cache,
             )
-            print(tensor.size())
             assert tensor.size() == (1, bs, self.dim), \
                 (cur_len, max_len, src_enc.size(), tensor.size(), (1, bs, self.dim))
 
@@ -663,7 +666,6 @@ class TransformerModel(nn.Module):
         done = [False for _ in range(bs)]
 
         while cur_len < max_len:
-
             # compute word scores
             tensor = self.forward(
                 'fwd',
