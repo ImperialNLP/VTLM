@@ -777,7 +777,7 @@ class Trainer(object):
                 if self.params.multi_gpu and 'SLURM_JOB_ID' in os.environ:
                     os.system('scancel ' + os.environ['SLURM_JOB_ID'])
                 sys.exit()
-        #self.save_checkpoint('checkpoint', include_optimizers=True)
+        # self.save_checkpoint('checkpoint', include_optimizers=True)
         self.epoch += 1
 
     def round_batch(self, x, lengths, positions, langs):
@@ -1108,12 +1108,14 @@ class EncDecTrainer(Trainer):
         lang2_id = params.lang2id[lang2]
         img_id = params.lang2id["img"]
 
+        # TODO: img1 here is detection_scores and they are not used..
+
         # generate batch
         _, _, img_dict, (img1, img_len), (x1, len1), (x2, len2) = self.get_batch('mmt', lang1, lang2)
 
         langs1 = x1.clone().fill_(lang1_id)
         langs2 = x2.clone().fill_(lang2_id)
-        img_langs = img1.clone().fill_(img_id)
+        img_langs = img1.clone().long().fill_(img_id)
 
         # target words to predict
         alen = torch.arange(len2.max(), dtype=torch.long, device=len2.device)
@@ -1122,20 +1124,24 @@ class EncDecTrainer(Trainer):
         assert len(y) == (len2 - 1).sum().item()
 
         # cuda
-        x1, len1, langs1, x2, len2, langs2, y, img1, img_len, img_langs = to_cuda(x1, len1, langs1, x2, len2, langs2, y,
-                                                                                  img1, img_len, img_langs)
+        x1, len1, langs1, x2, len2, langs2, y, img1, img_len, img_langs = to_cuda(
+            x1, len1, langs1, x2, len2, langs2, y, img1, img_len, img_langs)
 
         # encode source sentence
-        enc1 = self.encoder('fwd', x=x1, lengths=len1, langs=langs1, image_langs=img_langs, img_dict=img_dict,
-                            causal=False)
-        enc1 = enc1.transpose(0, 1)
+        enc1 = self.encoder(
+            'fwd', x=x1, lengths=len1, langs=langs1, image_langs=img_langs,
+            img_dict=img_dict, causal=False).transpose(0, 1)
 
         # decode target sentence
-        dec2 = self.decoder('fwd', x=x2, lengths=len2, langs=langs2, causal=True, src_enc=enc1, src_len=len1 + img_len)
+        dec2 = self.decoder(
+            'fwd', x=x2, lengths=len2, langs=langs2, causal=True,
+            src_enc=enc1, src_len=len1 + img_len)
 
         # loss
-        _, loss = self.decoder('predict', tensor=dec2, pred_mask=pred_mask, y=y, get_scores=False)
+        _, loss = self.decoder(
+            'predict', tensor=dec2, pred_mask=pred_mask, y=y, get_scores=False)
         self.stats[('AE-%s' % lang1) if lang1 == lang2 else ('MMT-%s-%s' % (lang1, lang2))].append(loss.item())
+
         loss = lambda_coeff * loss
 
         # optimize
