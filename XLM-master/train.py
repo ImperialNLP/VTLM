@@ -83,6 +83,8 @@ def get_parser():
                         help="Plug visual features first in the sequence.")
     parser.add_argument("--visual_relu", type=bool_flag, default=True,
                         help="Use ReLU for visual feature projections.")
+    parser.add_argument("--visual_dropout", type=float, default=0.1,
+                        help="Dropout to apply on visual stream.")
     parser.add_argument("--visual_lnorm", type=bool_flag, default=False,
                         help="Use LayerNorm for visual pathway.")
     parser.add_argument("--share_inout_emb", type=bool_flag, default=True,
