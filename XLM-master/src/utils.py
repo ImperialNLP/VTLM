@@ -36,7 +36,7 @@ def get_image_properties(img_dict, property_name):
     feat_list = []
     for img in img_dict:
         feat_list.append(img[property_name].squeeze())
-    return np.array(feat_list)
+    return np.array(feat_list, dtype=feat_list[0].dtype)
 
 
 def bool_flag(s):
