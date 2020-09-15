@@ -317,6 +317,7 @@ class ParallelDataset(Dataset):
         self.lengths2 = self.pos2[:, 1] - self.pos2[:, 0]
         logger.info("Removed %i too long sentences." % (init_size - len(indices)))
         self.check()
+        return self.indices
 
     def select_data(self, a, b):
         """
@@ -417,6 +418,7 @@ class ParallelDatasetWithRegions(Dataset):
         self.pos2 = pos2
         self.image_names = np.array(image_names)
         self.region_features_path = params.region_feats_path
+        self.num_of_regions = params.num_of_regions
         self.lengths1 = self.pos1[:, 1] - self.pos1[:, 0]
         self.lengths2 = self.pos2[:, 1] - self.pos2[:, 0]
         if masked_tokens is not None and masked_object_labels is not None:
@@ -589,26 +591,12 @@ class ParallelDatasetWithRegions(Dataset):
         return self.get_batches_iterator(batches, return_indices)
 
     def batch_images(self, images, feat_type):
-        """
-        Take as input a list of n sentences (torch.LongTensor vectors) and return
-        a tensor of size (slen, n) where slen is the length of the longest
-        sentence, and a vector lengths containing the length of each sentence.
-        """
-        # sentences = sorted(sentences, key=lambda x: len(x), reverse=True)
-        lengths = torch.LongTensor([len(s[feat_type]) for s in images])
-        imgs = torch.LongTensor(lengths.max().item(), lengths.size(0)).fill_(self.pad_index)
-        # imgs[0] = self.bor_index
-        for i, img in enumerate(images):
-            feat = img[feat_type]
-            try:
-                imgs[0:lengths[i], i].copy_(torch.from_numpy(feat))
-                # imgs[lengths[i] - 1, i] = self.eor_index
-            except Exception as e:
-                print(e)
-        return imgs, lengths
+        feats = torch.from_numpy(
+            np.array([img[feat_type][:self.num_of_regions] for img in images]))
+        lengths = torch.full((len(images),), self.num_of_regions, dtype=torch.long)
+        return feats, lengths
 
     def load_images(self, region_features_path, image_name_with_indices):
-
         img_data = []
         good_indices = []
         for ind, image_name in image_name_with_indices:
@@ -816,23 +804,10 @@ class DatasetWithRegions(object):
         return self.get_batches_iterator(batches, return_indices)
 
     def batch_images(self, images, feat_type):
-        """
-        Take as input a list of n sentences (torch.LongTensor vectors) and return
-        a tensor of size (slen, n) where slen is the length of the longest
-        sentence, and a vector lengths containing the length of each sentence.
-        """
-        # sentences = sorted(sentences, key=lambda x: len(x), reverse=True)
-        lengths = torch.LongTensor([len(s[feat_type]) for s in images])
-        imgs = torch.LongTensor(lengths.max().item(), lengths.size(0)).fill_(self.pad_index)
-        # imgs[0] = self.bor_index
-        for i, img in enumerate(images):
-            feat = img[feat_type]
-            try:
-                imgs[0:lengths[i], i].copy_(torch.from_numpy(feat))
-                # imgs[lengths[i] - 1, i] = self.eor_index
-            except Exception as e:
-                print(e)
-        return imgs, lengths
+        feats = torch.from_numpy(
+            np.array([img[feat_type][:self.num_of_regions] for img in images]))
+        lengths = torch.full((len(images),), self.num_of_regions, dtype=torch.long)
+        return feats, lengths
 
     def load_images(self, region_features_path, image_name_with_indices):
         img_data = []
