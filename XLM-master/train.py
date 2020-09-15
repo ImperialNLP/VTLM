@@ -36,7 +36,11 @@ def get_parser():
     parser.add_argument("--region_feats_path", type=str, default="/data/shared/ConceptualCaptions/fastrcnn_features_36/",
                         help="Path of the image region features.")
     parser.add_argument("--image_names", type=str, default="./data/conceptual_captions/",
-                        help="Path of the image region features.")
+                        help="Path of the image feature names.")
+    parser.add_argument("--num_of_regions", type=int, default=36,
+                        help="# of region features to use for multi-modal training.")
+    parser.add_argument("--num_of_classes", type=int, default=601,
+                        help="# of object label classes.")
     parser.add_argument("--exp_name", type=str, default="",
                         help="Experiment name")
     parser.add_argument("--save_periodic", type=int, default=0,

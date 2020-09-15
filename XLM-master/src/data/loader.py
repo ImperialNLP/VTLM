@@ -104,9 +104,6 @@ def set_dico_parameters(params, data, dico):
         params.mask_index = mask_index
     # params.bor_index = dico.index("<r>")
     # params.eor_index = dico.index("</r>")
-    params.num_of_regions = 36
-    params.num_of_classes = 601
-
 
 
 def load_mono_data(params, data):
