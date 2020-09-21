@@ -107,14 +107,6 @@ def build_model(params, dico):
             if all([k.startswith('module.') for k in reloaded.keys()]):
                 reloaded = {k[len('module.'):]: v for k, v in reloaded.items()}
 
-            # # HACK to reload models with less layers
-            # for i in range(12, 24):
-            #     for k in TRANSFORMER_LAYER_PARAMS:
-            #         k = k % i
-            #         if k in model.state_dict() and k not in reloaded:
-            #             logger.warning("Parameter %s not found. Ignoring ..." % k)
-            #             reloaded[k] = model.state_dict()[k]
-
             model.load_state_dict(reloaded)
 
         logger.info("Model: {}".format(model))
