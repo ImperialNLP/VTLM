@@ -144,6 +144,7 @@ class Dataset(object):
         self.lengths = self.pos[:, 1] - self.pos[:, 0]
         logger.info("Removed %i empty sentences." % (init_size - len(indices)))
         self.check()
+        return indices
 
     def remove_long_sentences(self, max_len):
         """
@@ -159,6 +160,7 @@ class Dataset(object):
         self.lengths = self.pos[:, 1] - self.pos[:, 0]
         logger.info("Removed %i too long sentences." % (init_size - len(indices)))
         self.check()
+        return indices
 
     def select_data(self, a, b):
         """
@@ -299,6 +301,7 @@ class ParallelDataset(Dataset):
         self.lengths2 = self.pos2[:, 1] - self.pos2[:, 0]
         logger.info("Removed %i empty sentences." % (init_size - len(indices)))
         self.check()
+        return indices
 
     def remove_long_sentences(self, max_len):
         """
