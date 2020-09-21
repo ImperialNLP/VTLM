@@ -231,6 +231,8 @@ def get_parser():
     # evaluation
     parser.add_argument("--eval_bleu", type=bool_flag, default=False,
                         help="Evaluate BLEU score during MT training")
+    parser.add_argument("--eval_max_len", default=-1, type=int,
+                        help="Hard length limit for generation if no <eos> is produced.")
     parser.add_argument("--eval_only", type=bool_flag, default=False,
                         help="Only run evaluations")
     parser.add_argument("--eval_image_order", type=str, default='',
