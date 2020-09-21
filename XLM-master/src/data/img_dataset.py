@@ -11,7 +11,7 @@ from .dataset import ParallelDataset, Dataset
 logger = getLogger()
 
 
-def load_images(self, sentence_ids, feat_path, img_names, n_regions):
+def load_images(sentence_ids, feat_path, img_names, n_regions):
     img_data = []
 
     for idx in sentence_ids:
