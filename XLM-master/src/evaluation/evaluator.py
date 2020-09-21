@@ -12,7 +12,7 @@ from collections import OrderedDict
 import numpy as np
 import torch
 
-from ..utils import to_cuda, restore_segmentation, concat_batches, concat_batches_triple
+from ..utils import to_cuda, restore_segmentation, concat_batches
 
 
 BLEU_SCRIPT_PATH = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'multi-bleu.perl')
@@ -116,19 +116,8 @@ class Evaluator(object):
         assert lang2 is None or lang2 in self.params.langs
         assert stream is False or lang2 is None
 
-        # hacks to reduce evaluation time when using many languages
-        if len(self.params.langs) > 30:
-            eval_lgs = set(["ar", "bg", "de", "el", "en", "es", "fr", "hi", "ru", "sw", "th", "tr", "ur", "vi", "zh", "ab", "ay", "bug", "ha", "ko", "ln", "min", "nds", "pap", "pt", "tg", "to", "udm", "uk", "zh_classical"])
-            eval_lgs = set(["ar", "bg", "de", "el", "en", "es", "fr", "hi", "ru", "sw", "th", "tr", "ur", "vi", "zh"])
-            subsample = 10 if (data_set == 'test' or lang1 not in eval_lgs) else 5
-            n_sentences = 600 if (data_set == 'test' or lang1 not in eval_lgs) else 1500
-        elif len(self.params.langs) > 5:
-            subsample = 10 if data_set == 'test' else 5
-            n_sentences = 300 if data_set == 'test' else 1500
-        else:
-            # n_sentences = -1 if data_set == 'valid' else 100
-            n_sentences = -1
-            subsample = 1
+        n_sentences = -1
+        subsample = 1
 
         if lang2 is None:
             if stream:
@@ -416,6 +405,7 @@ class Evaluator(object):
                 # words to predict
                 x, y, pred_mask = self.mask_out(x, lengths, rng)
 
+            # NOTE: Check for visual_first
             elif params.eval_probes.startswith('drop_last:'):
                 # drop last words
                 option = params.eval_probes.replace('drop_last:', '')
@@ -469,6 +459,7 @@ class Evaluator(object):
 
         lang1_id = params.lang2id[lang1]
         lang2_id = params.lang2id[lang2] if lang2 is not None else None
+        img_id = params.lang2id['img']
         l1l2 = lang1 if lang2 is None else f"{lang1}_{lang2}"
 
         n_words = 0
@@ -476,25 +467,26 @@ class Evaluator(object):
         n_valid = 0
 
         for batch in self.get_iterator_vlm(data_set, lang1, lang2, stream=(lang2 is None)):
-            # batch
             if lang2 is None:
-                (x, len1), (img, len_img), (img_dict), (masked_tokens), (masked_object_ids) = batch
-                image_langs = img.new(len_img.max().item(), len1.size(0)).fill_(params.lang2id["img"])
+                # vMLM
+                (x, len1), (img_dict), (masked_tokens), (masked_object_ids) = batch
                 langs = x.clone().fill_(lang1_id)
-                positions = None
+                image_langs = torch.empty((params.num_of_regions, len1.size(0))).long().fill_(img_id)
                 lengths = len1
+                positions = None
             else:
-                (masked_object_ids), (masked_tokens), (img_dict), (img1, len_img1), (x1, len1), (
-                    x2, len2) = batch
-                # menekse: img1 and leng_im1 only used for getting length of the image portion
-                x, lengths, positions, langs, image_langs = concat_batches_triple(
-                    x1, len1, lang1_id, x2, len2, lang2_id, img1, len_img1,
-                    params.lang2id["img"], params.pad_index, params.eos_index, reset_positions=True)
+                # vTLM
+                (masked_object_ids), (masked_tokens), (img_dict), (x1, len1), (x2, len2) = batch
+                image_langs = torch.empty((params.num_of_regions, len1.size(0))).long().fill_(img_id)
+                x, lengths, positions, langs = concat_batches(
+                    x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index,
+                    params.eos_index, reset_positions=True)
 
             if params.word_pred > 0:
                 # words to predict
                 x, y, pred_mask = self.mask_out(x, lengths, rng)
 
+            # NOTE: Check for visual_first
             elif params.eval_probes.startswith('drop_last:'):
                 # drop last words
                 option = params.eval_probes.replace('drop_last:', '')
@@ -513,16 +505,19 @@ class Evaluator(object):
                 x.masked_scatter_(pred_mask, y.clone().fill_(params.mask_index))
 
             # cuda
-            x, y, pred_mask, lengths, positions, langs = to_cuda(x, y, pred_mask, lengths, positions, langs)
-            image_langs = to_cuda(image_langs)[0]
+            x, y, pred_mask, lengths, positions, langs, image_langs = to_cuda(
+                x, y, pred_mask, lengths, positions, langs, image_langs)
 
             # forward / loss
             tensor = model(
                 'fwd', x=x, lengths=lengths, positions=positions, langs=langs,
                 image_langs=image_langs, causal=False, img_dict=img_dict)
 
-            img_tensor_length = params.num_of_regions
-            sent_tensor = tensor[:-img_tensor_length:, :]
+            # Fetch linguistic part of the hidden states for accuracy computation
+            if params.visual_first:
+                sent_tensor = tensor[params.num_of_regions:]
+            else:
+                sent_tensor = tensor[:-params.num_of_regions]
 
             word_scores, loss = model('predict', tensor=sent_tensor, pred_mask=pred_mask, y=y, get_scores=True)
 
@@ -536,6 +531,7 @@ class Evaluator(object):
         acc_name = '%s_%s_mlm_acc' % (data_set, l1l2)
         scores[ppl_name] = np.exp(xe_loss / n_words) if n_words > 0 else 1e9
         scores[acc_name] = 100. * n_valid / n_words if n_words > 0 else 0.
+
 
 class SingleEvaluator(Evaluator):
 
@@ -624,7 +620,10 @@ class EncDecEvaluator(Evaluator):
 
             # generate translation - translate / convert to text
             if eval_bleu:
-                max_len = int(1.5 * len1.max().item() + 10)
+                if params.eval_max_len == -1:
+                    max_len = int(1.5 * len1.max().item() + 10)
+                else:
+                    max_len = params.eval_max_len
                 if params.beam_size == 1:
                     generated, lengths = decoder.generate(enc1, len1 + params.num_of_regions, lang2_id, max_len=max_len)
                 else:
@@ -717,7 +716,10 @@ class EncDecEvaluator(Evaluator):
 
             # generate translation - translate / convert to text
             if eval_bleu:
-                max_len = int(1.5 * len1.max().item() + 10)
+                if params.eval_max_len == -1:
+                    max_len = int(1.5 * len1.max().item() + 10)
+                else:
+                    max_len = params.eval_max_len
                 if params.beam_size == 1:
                     generated, lengths = decoder.generate(enc1, len1, lang2_id, max_len=max_len)
                 else:
