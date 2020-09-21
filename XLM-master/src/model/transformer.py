@@ -242,7 +242,6 @@ class MultiHeadAttention(nn.Module):
 
 
 class TransformerFFN(nn.Module):
-
     def __init__(self, in_dim, dim_hidden, out_dim, dropout, gelu_activation):
         super().__init__()
         self.dropout = dropout
@@ -259,24 +258,24 @@ class TransformerFFN(nn.Module):
 
 
 class Projector(nn.Module):
+    """Image feature projection layer."""
     def __init__(self, params):
         super().__init__()
         self.relu = params.visual_relu
         self.linear = nn.Linear(1536, params.emb_dim)
 
     def forward(self, input):
-        # expects (batch_size,36,8,8,1586)
-        x = input.reshape(input.shape[0], input.shape[1], -1)
-        x = torch.from_numpy(x).cuda()
-        x = self.linear(x)
+        x = torch.from_numpy(input).cuda()
+        x = self.linear(x.view(x.size(0), x.size(1), -1))
         return F.relu(x) if self.relu else x
 
 
 class RegionalEncodings(nn.Module):
+    """Bounding-box projection for positional encodings of images."""
     def __init__(self, params):
         super().__init__()
         self.relu = params.visual_relu
-        self.linear = nn.Linear(4, params.emb_dim)
+        self.linear = nn.Linear(4, params.emb_dim, bias=False)
 
     def forward(self, input):
         x = torch.from_numpy(input).cuda()
@@ -322,15 +321,19 @@ class TransformerModel(nn.Module):
         self.n_heads = params.n_heads   # 8 by default
         self.n_layers = params.n_layers
         self.dropout = params.dropout
+        self.v_dropout = params.visual_dropout
         self.attention_dropout = params.attention_dropout
         assert self.dim % self.n_heads == 0, 'transformer dim must be a multiple of n_heads'
 
         # embeddings
         self.position_embeddings = Embedding(N_MAX_POSITIONS, self.dim)
+
         if params.sinusoidal_embeddings:
             create_sinusoidal_embeddings(N_MAX_POSITIONS, self.dim, out=self.position_embeddings.weight)
+
         if params.n_langs > 1 and self.use_lang_emb:
             self.lang_embeddings = Embedding(self.n_langs, self.dim)
+
         self.embeddings = Embedding(self.n_words, self.dim, padding_idx=self.pad_index)
         self.layer_norm_emb = nn.LayerNorm(self.dim, eps=1e-12)
 
@@ -402,14 +405,12 @@ class TransformerModel(nn.Module):
             assert self.is_decoder
             assert src_enc.size(0) == bs
 
-        # TODO: Do we need that?
-        # slen = slen + self.num_of_regions
-
         # generate masks
         mask, attn_mask = get_masks(slen, lengths, causal)
         # mask = combined_mask[:,self.num_of_regions:]
 
         if self.is_decoder and src_enc is not None:
+            # TODO: This is wrong if --visual_first is not given
             src_mask = torch.arange(src_len.max(), dtype=torch.long, device=lengths.device) < src_len[:, None]
         else:
             # cache is only active for decoder
@@ -445,17 +446,22 @@ class TransformerModel(nn.Module):
         tensor *= mask.unsqueeze(-1).to(tensor.dtype)
 
         if img_dict is not None and image_langs is not None:
-            image_langs = image_langs.transpose(0, 1)
-
+            # create masks which are always active by the way
             img_mask = mask.new_ones((mask.size(0), self.num_of_regions))
             img_attn_mask = img_mask.clone()
 
-            feats = self.projector(get_image_properties(img_dict, "detection_features")) + \
-                    self.regional_encodings(get_image_properties(img_dict, "detection_boxes")) + \
-                    self.lang_embeddings(image_langs)
+            # Get feature vectors
+            feats = get_image_properties(img_dict, 'detection_features')
+            bboxs = get_image_properties(img_dict, 'detection_boxes')
+
+            feats = self.projector(feats) + self.regional_encodings(bboxs) + \
+                    self.lang_embeddings(image_langs.t())
+
+            # enabled through `--visual_lnorm true`
             feats = self.layer_norm_vis(feats)
 
-            feats = F.dropout(feats, p=self.dropout, training=self.training)
+            if self.v_dropout > 0:
+                feats = F.dropout(feats, p=self.v_dropout, training=self.training)
 
             # concatenate: put image sequence first
             if self.visual_first:
@@ -463,11 +469,14 @@ class TransformerModel(nn.Module):
                 attn_mask = torch.cat((img_attn_mask, attn_mask), dim=1)
                 tensor = torch.cat((feats, tensor), dim=1)
             else:
+                # TODO: this may be error-prone!
                 mask = torch.cat((mask, img_mask), dim=1)
                 attn_mask = torch.cat((attn_mask, img_attn_mask), dim=1)
                 tensor = torch.cat((tensor, feats), dim=1)
 
+        ####################
         # transformer layers
+        ####################
         for i in range(self.n_layers):
             attn, _ = self.attentions[i](tensor, attn_mask, cache=cache)
             attn = F.dropout(attn, p=self.dropout, training=self.training)

@@ -53,7 +53,6 @@ class Trainer(object):
         if params.multi_gpu and params.amp == -1:
             logger.info("Using nn.parallel.DistributedDataParallel ...")
             for name in self.MODEL_NAMES:
-                # logger.info("name: ", name)
                 setattr(self, name,
                         nn.parallel.DistributedDataParallel(getattr(self, name), find_unused_parameters=True,
                                                             device_ids=[params.local_rank],
@@ -316,18 +315,12 @@ class Trainer(object):
             assert stream is False
             _lang1, _lang2 = (lang1, lang2) if lang1 < lang2 else (lang2, lang1)
 
-            if iter_name == "mmt":
-                iterator = self.data['vpara'][(_lang1, _lang2)]['train'].get_iterator(
-                    shuffle=True,
-                    group_by_size=self.params.group_by_size,
-                    n_sentences=-1,
-                )
-            else:
-                iterator = self.data['para'][(_lang1, _lang2)]['train'].get_iterator(
-                    shuffle=True,
-                    group_by_size=self.params.group_by_size,
-                    n_sentences=-1,
-                )
+            key = 'vpara' if iter_name == 'mmt' else 'para'
+            iterator = self.data[key][(_lang1, _lang2)]['train'].get_iterator(
+                shuffle=True,
+                group_by_size=self.params.group_by_size,
+                n_sentences=-1,
+            )
 
         self.iterators[(iter_name, lang1, lang2)] = iterator
         return iterator
@@ -350,6 +343,7 @@ class Trainer(object):
         else:
             assert stream is False
             _lang1, _lang2 = (lang1, lang2) if lang1 < lang2 else (lang2, lang1)
+
             iterator = self.data['vpara'][(_lang1, _lang2)]['train'].get_iterator(
                 shuffle=True,
                 group_by_size=self.params.group_by_size,
@@ -1108,14 +1102,12 @@ class EncDecTrainer(Trainer):
         lang2_id = params.lang2id[lang2]
         img_id = params.lang2id["img"]
 
-        # TODO: img1 here is detection_scores and they are not used..
-
         # generate batch
-        _, _, img_dict, (img1, img_len), (x1, len1), (x2, len2) = self.get_batch('mmt', lang1, lang2)
+        _, _, img_dict, (x1, len1), (x2, len2) = self.get_batch('mmt', lang1, lang2)
 
         langs1 = x1.clone().fill_(lang1_id)
         langs2 = x2.clone().fill_(lang2_id)
-        img_langs = img1.clone().long().fill_(img_id)
+        img_langs = torch.empty((params.num_of_regions, langs1.size(1))).long().fill_(img_id)
 
         # target words to predict
         alen = torch.arange(len2.max(), dtype=torch.long, device=len2.device)
@@ -1124,8 +1116,8 @@ class EncDecTrainer(Trainer):
         assert len(y) == (len2 - 1).sum().item()
 
         # cuda
-        x1, len1, langs1, x2, len2, langs2, y, img1, img_len, img_langs = to_cuda(
-            x1, len1, langs1, x2, len2, langs2, y, img1, img_len, img_langs)
+        x1, len1, langs1, x2, len2, langs2, y, img_langs = to_cuda(
+            x1, len1, langs1, x2, len2, langs2, y, img_langs)
 
         # encode source sentence
         enc1 = self.encoder(
@@ -1135,7 +1127,7 @@ class EncDecTrainer(Trainer):
         # decode target sentence
         dec2 = self.decoder(
             'fwd', x=x2, lengths=len2, langs=langs2, causal=True,
-            src_enc=enc1, src_len=len1 + img_len)
+            src_enc=enc1, src_len=len1 + params.num_of_regions)
 
         # loss
         _, loss = self.decoder(

@@ -18,7 +18,6 @@ from .dictionary import BOS_WORD, EOS_WORD, PAD_WORD, UNK_WORD, MASK_WORD
 logger = getLogger()
 
 
-
 def process_binarized(data, params):
     """
     Process a binarized dataset and log main statistics.
@@ -81,7 +80,6 @@ def set_dico_parameters(params, data, dico):
     else:
         data['dico'] = dico
 
-    print("DICO: ", data.keys())
     n_words = len(dico)
     bos_index = dico.index(BOS_WORD)
     eos_index = dico.index(EOS_WORD)
@@ -150,7 +148,8 @@ def load_mono_data(params, data):
 
                 # remove empty and too long sentences
                 if splt == 'train':
-                    dataset.remove_empty_sentences()
+                    # TODO: this is risky for 3-way parallel datasets
+                    # dataset.remove_empty_sentences()
                     dataset.remove_long_sentences(params.max_len)
 
                 # if there are several processes on the same machine, we can split the dataset
@@ -190,8 +189,8 @@ def load_vmono_data(params, data):
             mono_data = load_binarized(params.mono_dataset[lang][splt], params)
             image_names = []
             existing_indices = []
-            with open(os.path.join(params.image_names,"image_names."+splt),"r") as img_names:
-                for i,line in enumerate(img_names):
+            with open(os.path.join(params.image_names, f"image_names.{splt}")) as img_names:
+                for i, line in enumerate(img_names):
                     line = line.strip()
                     line = line + ".pkl"
                     image_names.append(line)
@@ -202,7 +201,7 @@ def load_vmono_data(params, data):
             if params.mask_file_dir:
                 masked_tokens = []
                 masked_object_labels = []
-                with open(os.path.join(params.mask_file_dir, "mask." + splt), "r") as masked_file:
+                with open(os.path.join(params.mask_file_dir, f"mask.{splt}")) as masked_file:
                     for info in masked_file.readlines():
                         info = info.strip().split("\t")
                         word_indices = []
@@ -220,12 +219,14 @@ def load_vmono_data(params, data):
             # for denoising auto-encoding and online back-translation, we need a non-stream (batched) dataset
 
             # create batched dataset
-            dataset = DatasetWithRegions(mono_data['sentences'], mono_data['positions'],image_names,masked_tokens,
-                                         masked_object_labels, params)
+            dataset = DatasetWithRegions(
+                mono_data['sentences'], mono_data['positions'],
+                image_names, masked_tokens, masked_object_labels, params)
 
             # remove empty and too long sentences
             if splt == 'train':
-                dataset.remove_empty_sentences()
+                # TODO: this is risky for 3-way parallel datasets
+                # dataset.remove_empty_sentences()
                 dataset.remove_long_sentences(params.max_len)
 
             # if there are several processes on the same machine, we can split the dataset
@@ -241,6 +242,7 @@ def load_vmono_data(params, data):
 
     logger.info("")
 
+
 def load_para_data(params, data):
     """
     Load parallel data.
@@ -248,7 +250,6 @@ def load_para_data(params, data):
     data['para'] = {}
 
     required_para_train = set(params.clm_steps + params.mlm_steps + params.pc_steps + params.mt_steps + params.mmt_steps)
-
 
     for src, tgt in params.para_dataset.keys():
 
@@ -287,7 +288,8 @@ def load_para_data(params, data):
 
             # remove empty and too long sentences
             if splt == 'train':
-                dataset.remove_empty_sentences()
+                # TODO: this is risky for 3-way parallel datasets
+                # dataset.remove_empty_sentences()
                 dataset.remove_long_sentences(params.max_len)
 
             # for validation and test set, enumerate sentence per sentence
@@ -305,6 +307,7 @@ def load_para_data(params, data):
             logger.info("")
 
     logger.info("")
+
 
 def load_vpara_data(params, data):
     """
@@ -337,8 +340,8 @@ def load_vpara_data(params, data):
             tgt_data = load_binarized(tgt_path, params)
             image_names = []
             existing_indices = []
-            with open(os.path.join(params.image_names,"image_names."+splt),"r") as img_names:
-                for i,line in enumerate(img_names):
+            with open(os.path.join(params.image_names, f"image_names.{splt}")) as img_names:
+                for i, line in enumerate(img_names):
                     line = line.strip()
                     line = line + ".pkl"
                     image_names.append(line)
@@ -349,7 +352,7 @@ def load_vpara_data(params, data):
             if params.mask_file_dir:
                 masked_tokens = []
                 masked_object_labels = []
-                with open(os.path.join(params.mask_file_dir, "mask." + splt), "r") as masked_file:
+                with open(os.path.join(params.mask_file_dir, f"mask.{splt}")) as masked_file:
                     for info in masked_file.readlines():
                         info = info.strip().split("\t")
                         word_indices = []
@@ -385,7 +388,8 @@ def load_vpara_data(params, data):
 
             # remove empty and too long sentences
             if splt == 'train':
-                dataset.remove_empty_sentences()
+                # TODO: this is risky for 3-way parallel datasets
+                # dataset.remove_empty_sentences()
                 dataset.remove_long_sentences(params.max_len)
 
             # for validation and test set, enumerate sentence per sentence
@@ -403,9 +407,6 @@ def load_vpara_data(params, data):
             logger.info("")
 
     logger.info("")
-
-
-
 
 
 def check_data_params(params):
@@ -533,7 +534,7 @@ def load_data(params):
 
     if params.only_vlm or params.mmt_steps:
         if params.load_vlm_mono:
-            load_vmono_data(params,data)
+            load_vmono_data(params, data)
         else:
             load_vpara_data(params, data)
     else:

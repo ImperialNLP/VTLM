@@ -223,7 +223,7 @@ class Evaluator(object):
 
                 # convert to text
                 if params.mmt_steps:
-                    for (sent1, len1), (sent2, len2), (img, img_len), _, _, _ in self.get_iterator(data_set, lang1, lang2):
+                    for (sent1, len1), (sent2, len2), _, _, _ in self.get_iterator(data_set, lang1, lang2):
                         lang1_txt.extend(convert_to_text(sent1, len1, self.dico, params))
                         lang2_txt.extend(convert_to_text(sent2, len2, self.dico, params))
                 else:
@@ -585,12 +585,11 @@ class EncDecEvaluator(Evaluator):
             hypothesis = []
 
         for batch in self.get_iterator(data_set, lang1, lang2):
-
             # generate batch
-            _, _, img_dict, (imgs, img_len), (x1, len1), (x2, len2) = batch
+            _, _, img_dict, (x1, len1), (x2, len2) = batch
             langs1 = x1.clone().fill_(lang1_id)
             langs2 = x2.clone().fill_(lang2_id)
-            img_langs = imgs.clone().fill_(img_id)
+            img_langs = torch.empty((params.num_of_regions, langs1.size(1))).long().fill_(img_id)
 
             # target words to predict
             alen = torch.arange(len2.max(), dtype=torch.long, device=len2.device)
@@ -599,8 +598,8 @@ class EncDecEvaluator(Evaluator):
             assert len(y) == (len2 - 1).sum().item()
 
             # cuda
-            x1, len1, langs1, x2, len2, langs2, y, img1, img_len, img_langs = to_cuda(
-                x1, len1, langs1, x2, len2, langs2, y, imgs, img_len, img_langs)
+            x1, len1, langs1, x2, len2, langs2, y, img_langs = to_cuda(
+                x1, len1, langs1, x2, len2, langs2, y, img_langs)
             # encode source sentence
             enc1 = encoder(
                 'fwd', x=x1, lengths=len1, langs=langs1, image_langs=img_langs,
@@ -611,7 +610,9 @@ class EncDecEvaluator(Evaluator):
             enc1 = enc1.half() if params.fp16 else enc1
 
             # decode target sentence
-            dec2 = decoder('fwd', x=x2, lengths=len2, langs=langs2, causal=True, src_enc=enc1, src_len=len1+img_len)
+            dec2 = decoder(
+                'fwd', x=x2, lengths=len2, langs=langs2, causal=True,
+                src_enc=enc1, src_len=len1 + params.num_of_regions)
 
             # loss
             word_scores, loss = decoder('predict', tensor=dec2, pred_mask=pred_mask, y=y, get_scores=True)
@@ -625,10 +626,10 @@ class EncDecEvaluator(Evaluator):
             if eval_bleu:
                 max_len = int(1.5 * len1.max().item() + 10)
                 if params.beam_size == 1:
-                    generated, lengths = decoder.generate(enc1, len1+img_len, lang2_id, max_len=max_len)
+                    generated, lengths = decoder.generate(enc1, len1 + params.num_of_regions, lang2_id, max_len=max_len)
                 else:
                     generated, lengths = decoder.generate_beam(
-                        enc1, len1+img_len, lang2_id, beam_size=params.beam_size,
+                        enc1, len1 + params.num_of_regions, lang2_id, beam_size=params.beam_size,
                         length_penalty=params.length_penalty,
                         early_stopping=params.early_stopping,
                         max_len=max_len
@@ -641,7 +642,6 @@ class EncDecEvaluator(Evaluator):
 
         # compute BLEU
         if eval_bleu:
-
             # hypothesis / reference paths
             hyp_name = 'hyp{0}.{1}-{2}.{3}.txt'.format(scores['epoch'], lang1, lang2, data_set)
             hyp_path = os.path.join(params.hyp_path, hyp_name)
