@@ -12,7 +12,8 @@ from logging import getLogger
 import numpy as np
 import torch
 
-from .dataset import StreamDataset, Dataset, ParallelDataset, ParallelDatasetWithRegions, DatasetWithRegions
+from . import StreamDataset, Dataset, ParallelDataset
+from . import ParallelDatasetWithRegions, DatasetWithRegions
 from .dictionary import BOS_WORD, EOS_WORD, PAD_WORD, UNK_WORD, MASK_WORD
 
 logger = getLogger()
