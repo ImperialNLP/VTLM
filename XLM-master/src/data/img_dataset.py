@@ -41,6 +41,7 @@ class DatasetWithRegions(Dataset):
         self.pos = pos
         self.lengths = self.pos[:, 1] - self.pos[:, 0]
 
+        self.num_of_regions = params.num_of_regions
         self.region_features_path = params.region_feats_path
         self.image_names = np.array(image_names)
         if masked_tokens is not None and masked_object_labels is not None:
