@@ -12,7 +12,7 @@ from torch.nn.utils import clip_grad_norm_
 import apex
 import random
 from .optim import get_optimizer
-from .utils import to_cuda, concat_batches, find_modules, concat_batches_triple, get_image_properties
+from .utils import to_cuda, concat_batches, find_modules, get_image_properties
 from .utils import parse_lambda_config, update_lambdas
 from .model.transformer import TransformerFFN
 from torch.utils.tensorboard import SummaryWriter
@@ -483,12 +483,9 @@ class Trainer(object):
         return words, lengths
 
     def mask_out_image(self, img_dict, masked_labels=None):
-
         params = self.params
 
-        x = torch.from_numpy(get_image_properties(img_dict, "detection_classes").astype(dtype='float32'))
-        # bor_tensor = torch.from_numpy(np.array([self.params.bor_index])).long().unsqueeze(0).repeat(x.shape[0],1)
-        # eor_tensor = torch.from_numpy(np.array([self.params.eor_index])).long().unsqueeze(0).repeat(x.shape[0],1)
+        x = torch.from_numpy(get_image_properties(img_dict, "detection_classes").astype('int64'))
         x = x.t()
         slen, bs = x.size()
 
@@ -614,12 +611,14 @@ class Trainer(object):
             (x1, len1) = self.get_batch(name, lang1)
             (x2, len2) = (x1, len1)
             (x1, len1) = self.add_noise(x1, len1)
-            x, lengths, positions, langs = concat_batches(x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index,
-                                                          params.eos_index, reset_positions=False)
+            x, lengths, positions, langs = concat_batches(
+                x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index,
+                params.eos_index, reset_positions=False)
         else:
             (x1, len1), (x2, len2) = self.get_batch(name, lang1, lang2)
-            x, lengths, positions, langs = concat_batches(x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index,
-                                                          params.eos_index, reset_positions=True)
+            x, lengths, positions, langs = concat_batches(
+                x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index,
+                params.eos_index, reset_positions=True)
 
         return x, lengths, positions, langs, (None, None) if lang2 is None else (len1, len2)
 
@@ -630,21 +629,24 @@ class Trainer(object):
         params = self.params
         lang1_id = params.lang2id[lang1]
         lang2_id = params.lang2id[lang2] if lang2 is not None else None
+        img_id = params.lang2id['img']
 
         if lang2 is not None:
-            (masked_object_ids), (masked_tokens), (img_dict), (img1, len_img1), (x1, len1), (x2, len2) = self.get_batch_vpara(name, lang1, lang2)
-
-            # menekse: img1 and leng_im1 only used for getting length of the image portion
-            x, lengths, positions, langs, image_langs = concat_batches_triple(x1, len1, lang1_id, x2, len2, lang2_id, img1,
-                                                                              len_img1, params.lang2id["img"],
-                                                                              params.pad_index,
-                                                                              params.eos_index, reset_positions=True)
+            # vTLM
+            (masked_object_ids), (masked_tokens), (img_dict), (x1, len1), (x2, len2) = self.get_batch_vpara(name, lang1, lang2)
+            x, lengths, positions, langs = concat_batches(
+                x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index,
+                params.eos_index, reset_positions=True)
+            image_langs = torch.empty(
+                (params.num_of_regions, len1.size(0))).long().fill_(img_id)
         else:
-            (x, len1), (img, len_img), (img_dict), (masked_tokens), (masked_object_ids) = self.get_batch_vpara(name, lang1, lang2)
-            image_langs = img.new(len_img.max().item(), len1.size(0)).fill_(params.lang2id["img"])
+            # vMLM
+            (x, len1), (img_dict), (masked_tokens), (masked_object_ids) = self.get_batch_vpara(name, lang1, lang2)
             langs = x.clone().fill_(lang1_id)
-            positions = None
+            image_langs = torch.empty(
+                (params.num_of_regions, len1.size(0))).long().fill_(img_id)
             lengths = len1
+            positions = None
 
         return x, lengths, positions, langs, image_langs, img_dict, masked_object_ids, masked_tokens, (None, None)
 
@@ -892,7 +894,7 @@ class Trainer(object):
         self.stats['processed_s'] += lengths.size(0)
         self.stats['processed_w'] += pred_mask.sum().item()
 
-    def vlm_step(self, lang1, lang2, lambda_coeff, iter):  # (32,36,8,8,1586),(32,36,4)
+    def vlm_step(self, lang1, lang2, lambda_coeff, iter):
         """
         Masked word prediction step.
         MLM objective is lang2 is None, TLM objective otherwise.
@@ -900,6 +902,7 @@ class Trainer(object):
         assert lambda_coeff >= 0
         if lambda_coeff == 0:
             return
+
         params = self.params
         name = 'model' if params.encoder_only else 'encoder'
         model = getattr(self, name)
@@ -910,25 +913,28 @@ class Trainer(object):
             lang1, lang2, 'pred_object')
         x, lengths, positions, langs, _ = self.round_batch(x, lengths, positions, langs)
 
-        x, y, pred_mask = self.mask_out(x, lengths, masked_tokens, langs)
+        # Get prediction masks
+        x, y, txt_pred_mask = self.mask_out(x, lengths, masked_tokens, langs)
         img_x, img_y, img_pred_mask = self.mask_out_image(img_dict, masked_object_ids)
 
-        pred_mask = torch.cat((pred_mask, img_pred_mask))
-
         # cuda
-        x, y, pred_mask, lengths, positions, langs = to_cuda(x, y, pred_mask, lengths, positions, langs)
+        x, y, txt_pred_mask, lengths, positions, langs = to_cuda(x, y, txt_pred_mask, lengths, positions, langs)
         img_x, img_y, img_pred_mask, image_langs = to_cuda(img_x, img_y, img_pred_mask, image_langs)
 
         # forward / loss
-        tensor = model('fwd', x=x, lengths=lengths, positions=positions, langs=langs, image_langs=image_langs,
-                       causal=False,
-                       img_dict=img_dict)
-        img_tensor_length = params.num_of_regions
-        sent_tensor = tensor[:-img_tensor_length:, :]
-        sent_pred_mask = pred_mask[:-img_tensor_length:, :]
-        img_tensor = tensor[:img_tensor_length:, :]
+        tensor = model(
+            'fwd', x=x, lengths=lengths, positions=positions, langs=langs, image_langs=image_langs,
+            causal=False, img_dict=img_dict)
 
-        _, text_loss = model('predict', tensor=sent_tensor, pred_mask=sent_pred_mask, y=y, get_scores=False)
+        # slice the outputs back to feed into prediction head(s)
+        if params.visual_first:
+            sent_tensor = tensor[params.num_of_regions:]
+            img_tensor = tensor[:params.num_of_regions]
+        else:
+            sent_tensor = tensor[:langs.size(0)]
+            img_tensor = tensor[langs.size(0):]
+
+        _, text_loss = model('predict', tensor=sent_tensor, pred_mask=txt_pred_mask, y=y, get_scores=False)
         _, img_loss = model('predict_img_class', tensor=img_tensor, pred_mask=img_pred_mask, y=img_y, get_scores=False)
 
         loss = text_loss + img_loss
@@ -936,16 +942,9 @@ class Trainer(object):
         loss = lambda_coeff * loss
 
         if iter % 100 == 0:
-            self.writer.add_scalar('img_loss',
-                                   img_loss.data.tolist(),
-                                   iter)
-            self.writer.add_scalar('text_loss',
-                                   text_loss.data.tolist(),
-                                   iter)
-
-            self.writer.add_scalar('total_loss',
-                                   loss.data.tolist(),
-                                   iter)
+            self.writer.add_scalar('img_loss', img_loss.item(), iter)
+            self.writer.add_scalar('text_loss', text_loss.item(), iter)
+            self.writer.add_scalar('total_loss', loss.item(), iter)
 
         # optimize
         self.optimize(loss)
@@ -953,7 +952,7 @@ class Trainer(object):
         # number of processed sentences / words
         self.n_sentences += params.batch_size
         self.stats['processed_s'] += lengths.size(0)
-        self.stats['processed_w'] += pred_mask.sum().item()
+        self.stats['processed_w'] += txt_pred_mask.sum().item() + img_pred_mask.sum().item()
 
     def pc_step(self, lang1, lang2, lambda_coeff):
         """
