@@ -93,6 +93,8 @@ def get_parser():
                         help="Use sinusoidal embeddings")
     parser.add_argument("--use_lang_emb", type=bool_flag, default=True,
                         help="Use language embedding")
+    parser.add_argument("--scale_emb", type=bool_flag, default=False,
+                        help="Scale embeddings by sqrt(model_dim).")
 
     parser.add_argument("--only_vlm", type=bool_flag, default=False,
                         help="Run only vlm step")

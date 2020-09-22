@@ -309,6 +309,7 @@ class TransformerModel(nn.Module):
         self.id2lang = params.id2lang
         self.lang2id = params.lang2id
         self.batch_size = params.batch_size
+        self.scale_emb = params.scale_emb
         self.use_lang_emb = getattr(params, 'use_lang_emb', True)
         self.visual_first = params.visual_first
         assert len(self.dico) == self.n_words
@@ -395,7 +396,7 @@ class TransformerModel(nn.Module):
         """
         x = x.transpose(0, 1)  # batch size as dimension 0
 
-        # check inputs
+        # check inputs (target word indices)
         bs, slen = x.size()
 
         assert lengths.size(0) == bs
@@ -438,6 +439,11 @@ class TransformerModel(nn.Module):
             attn_mask = attn_mask[:, -_slen:]
 
         tensor = self.embeddings(x)
+
+        if self.scale_emb:
+            # scale embeddings w.r.t pos embs
+            tensor.mul_(tensor.size(-1) ** 0.5)
+
         tensor = tensor + self.position_embeddings(positions).expand_as(tensor)
         if langs is not None and self.use_lang_emb:
             tensor = tensor + self.lang_embeddings(langs)
