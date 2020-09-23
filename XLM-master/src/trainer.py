@@ -108,18 +108,19 @@ class Trainer(object):
         self.n_iter = 0
         self.n_total_iter = 0
         self.n_sentences = 0
-        if 'para' in data:
+        if 'para' in data or 'vpara' in data:
+            d = data.get('para', data.get('vpara'))
             self.stats = OrderedDict(
                 [('processed_s', 0), ('processed_w', 0)] +
                 [('CLM-%s' % ll, []) for ll in params.langs] +
-                [('CLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
-                [('CLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
+                [('CLM-%s-%s' % (l1, l2), []) for l1, l2 in d.keys()] +
+                [('CLM-%s-%s' % (l2, l1), []) for l1, l2 in d.keys()] +
                 [('MLM-%s' % ll, []) for ll in params.langs] +
-                [('MLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
-                [('MLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
+                [('MLM-%s-%s' % (l1, l2), []) for l1, l2 in d.keys()] +
+                [('MLM-%s-%s' % (l2, l1), []) for l1, l2 in d.keys()] +
                 [('VLM-%s' % ll, []) for ll in params.langs] +
-                [('VLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
-                [('VLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
+                [('VLM-%s-%s' % (l1, l2), []) for l1, l2 in d.keys()] +
+                [('VLM-%s-%s' % (l2, l1), []) for l1, l2 in d.keys()] +
                 [('PC-%s-%s' % (l1, l2), []) for l1, l2 in params.pc_steps] +
                 [('AE-%s' % lang, []) for lang in params.ae_steps] +
                 [('MT-%s-%s' % (l1, l2), []) for l1, l2 in params.mt_steps] +
