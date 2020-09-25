@@ -1,6 +1,6 @@
 #!/bin/bash
 DATA_PATH=/data2/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe/multi30k
-DUMP_PATH=/data/ozan/experiments/mmvc/mmvc_code/multi30k_mmt_ftune_v4_periodic_tlm
+DUMP_PATH=/data/ozan/experiments/mmvc/mmvc_code/multi30k_mmt/from_vtlm_decinit
 FEAT_PATH=/data/ozan/datasets/multi30k/features/oidv4/avgpool
 
 CUR_DIR=`dirname $0`
@@ -29,7 +29,7 @@ L1=`echo $PAIR | cut -d'-' -f1`
 EPOCH=`wc -l ${DATA_PATH}/train.${PAIR}.$L1 | head -n1 | cut -d' ' -f1`
 BS=${BS:-64}
 LR=${LR:-0.00001}
-NAME="${CKPT_NAME}_ftune_bs${BS}_lr${LR}"
+NAME="${CKPT_NAME}_ftune_bs${BS}_lr${LR}_36regs"
 PREFIX=${PREFIX:-}
 DUMP_PATH="${DUMP_PATH}/${PREFIX}"
 
@@ -42,5 +42,5 @@ python $TRAIN --beam_size 1 --exp_name ${NAME} --dump_path ${DUMP_PATH} \
   --batch_size ${BS} --optimizer "adam,lr=${LR}" \
   --epoch_size ${EPOCH} --eval_bleu true --max_epoch 500 \
   --stopping_criterion 'valid_en-de_mmt_bleu,20' --validation_metrics 'valid_en-de_mmt_bleu' \
-  --init_dec_from_enc --region_feats_path $FEAT_PATH \
-  --image_names ${DATA_PATH} $@
+  --region_feats_path $FEAT_PATH --image_names ${DATA_PATH} --visual_first true \
+  --num_of_regions 36 --init_dec_from_enc $@
