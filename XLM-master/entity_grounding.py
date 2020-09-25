@@ -280,8 +280,6 @@ def main():
                 for bx in labels[key]:
                     one_hot_labels[key][bx] = 1
 
-
-
             # bbox features
             image_feats = np.expand_dims(feat["feats"][np.array(boxes_to_take)], 0)
 
@@ -298,9 +296,9 @@ def main():
             x, lengths, image_langs, langs, labels = to_cuda(
                 idxs, lengths, image_langs, langs, one_hot_labels)
 
-            phrases_to_predict = [phr.split() for phr in phrases_to_predict]
-
+            # NOTE: May be unnecessary after removing BPE'd sents
             visited = {}
+            phrases_to_predict = [phr.split() for phr in phrases_to_predict]
             phrase_ids = [np.array([word2id[qt] for qt in zt]) for zt in phrases_to_predict]
             phrase_indices = [torch.LongTensor(np.array(find_pred_indices(phr, idxs, visited))) for phr in
                               phrase_ids]
