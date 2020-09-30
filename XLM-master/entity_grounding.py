@@ -35,6 +35,22 @@ else:
 import fastBPE
 
 
+def reorder_and_normalize_boxes(box_list, width, height, normcoords):
+    new_box_list = []
+    # for checking validity
+    normc = ['|'.join(map(lambda x: f'{x:.3f}', xx)) for xx in normcoords]
+
+    for box in box_list:
+        xmin, ymin, xmax, ymax = box
+        new_box_list.append(
+            [ymin / height, xmin / width, ymax / height, xmax / width])
+        _str = '|'.join(map(lambda x: f'{x:.3f}', new_box_list[-1]))
+        assert _str in normc
+
+    return new_box_list
+
+
+
 def fwd(model, x, lengths, causal, params,
         positions=None, langs=None, image_langs=None, cache=None,
         image_feats=None, bboxes=None, result_dict=None, phrase_indices=None,
@@ -119,7 +135,12 @@ def fwd(model, x, lengths, causal, params,
         attn, weights = model.attentions[i](tensor, attn_mask, cache=cache)
 
         # TODO: These should probably change with `params.visual_first` !
-        box_attns = weights[..., lengths.max().item()::][0]
+        weights.squeeze_(0)
+        print(weights.shape, lengths.max(), bboxes.shape)
+        if params.visual_first:
+            box_attns = weights[..., -lengths.max().item()::]
+        else:
+            box_attns = weights[..., lengths.max().item()::]
         preds = torch.zeros(model.n_heads, len(phrase_indices), bboxes.shape[1])
 
         for head in range(model.n_heads):
@@ -283,10 +304,12 @@ def main():
             # bbox features
             image_feats = np.expand_dims(feat["feats"][np.array(boxes_to_take)], 0)
 
-            # bbox coordinates
+            # bbox coordinates to pass to the model (should be normalized!)
+            # original order: xmin, ymin, xmax, ymax
+            # required order: ymin, xmin, ymax, xmax (1, 0, 3, 2)
+            normc = feat['normalized_coords'].tolist()
+            bboxes = reorder_and_normalize_boxes(bboxes, annots['width'], annots['height'], normc)
             image_regions = np.expand_dims(np.array(bboxes, dtype=np.float32), 0)
-
-            # FIXME: Correct coordinates should be passed!
 
             # modality embs
             langs = idxs.new(idxs.shape[0], 1).fill_(params.lang2id["en"]).long()
