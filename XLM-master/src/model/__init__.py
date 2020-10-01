@@ -137,7 +137,7 @@ def build_model(params, dico):
                 enc_reload = enc_reload['model' if 'model' in enc_reload else 'encoder']
                 if all([k.startswith('module.') for k in enc_reload.keys()]):
                     enc_reload = {k[len('module.'):]: v for k, v in enc_reload.items()}
-                enc_miss, enc_unexp = encoder.load_state_dict(enc_reload)
+                enc_miss, enc_unexp = encoder.load_state_dict(enc_reload, strict=False)
                 for name in sorted(enc_miss):
                     logger.info(f'Encoder reloading: missing parameter {name} will be randomly initialized')
                 for name in sorted(enc_unexp):
@@ -163,7 +163,7 @@ def build_model(params, dico):
                     if params.reset_dec_output_bias:
                         logger.info('** Resetting decoder output bias')
                         dec_reload['pred_layer.proj.bias'].fill_(0.0)
-                    decoder.load_state_dict(dec_reload, strict=True)
+                    decoder.load_state_dict(dec_reload, strict=False)
                 else:
                     # load weights with strict=False to allow for missing parameters
                     dec_miss, dec_unexp = decoder.load_state_dict(dec_reload, strict=False)
