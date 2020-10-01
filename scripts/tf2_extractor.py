@@ -85,7 +85,7 @@ if __name__ == '__main__':
                         help='Image root to be prepended to every image name.')
     parser.add_argument('-o', '--output-folder', type=str, required=True,
                         help='Output folder where features will be saved.')
-    parser.add_argument('-f', '--format', default='pickle',
+    parser.add_argument('-f', '--format', default='picklebz2',
                         help='Output file format.')
     parser.add_argument('-p', '--parallel', action='store_true',
                         help='Parallel dumper process for output files.')
