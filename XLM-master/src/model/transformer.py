@@ -8,6 +8,8 @@
 from logging import getLogger
 import math
 import itertools
+from collections import defaultdict
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -483,18 +485,25 @@ class TransformerModel(nn.Module):
         ####################
         # transformer layers
         ####################
+        self.cross_attn = {}
+        self.self_attn = {}
         for i in range(self.n_layers):
-            attn, _ = self.attentions[i](tensor, attn_mask, cache=cache)
+            attn, p_self = self.attentions[i](tensor, attn_mask, cache=cache)
             attn = F.dropout(attn, p=self.dropout, training=self.training)
             tensor = tensor + attn
             tensor = self.layer_norm1[i](tensor)
+            if not self.training:
+                self.self_attn[i] = p_self.cpu().numpy()
 
             # encoder attention (for decoder only)
             if self.is_decoder and src_enc is not None:
-                attn, _ = self.encoder_attn[i](tensor, src_mask, kv=src_enc, cache=cache)
+                attn, p_cross = self.encoder_attn[i](tensor, src_mask, kv=src_enc, cache=cache)
                 attn = F.dropout(attn, p=self.dropout, training=self.training)
                 tensor = tensor + attn
                 tensor = self.layer_norm15[i](tensor)
+                # register attention weights
+                if not self.training:
+                    self.cross_attn[i] = p_cross.cpu().numpy()
 
             # FFN
             tensor = tensor + self.ffns[i](tensor)
@@ -576,6 +585,9 @@ class TransformerModel(nn.Module):
         # cache compute states
         cache = {'slen': 0}
 
+        # store cross attention weights
+        self.cross_att = defaultdict(list)
+
         while cur_len < max_len:
             # compute word scores
             tensor = self.forward(
@@ -589,6 +601,7 @@ class TransformerModel(nn.Module):
                 src_len=src_len,
                 cache=cache,
             )
+            self.cross_att['weights'].append(self.cross_attn)
             assert tensor.size() == (1, bs, self.dim), \
                 (cur_len, max_len, src_enc.size(), tensor.size(), (1, bs, self.dim))
 
@@ -618,6 +631,10 @@ class TransformerModel(nn.Module):
 
         # sanity check
         assert (generated == self.eos_index).sum() == 2 * bs
+
+        # Fill these for further probing
+        self.cross_att['tgt'] = generated[:cur_len].cpu().numpy()
+        self.cross_att['len'] = gen_len.cpu().numpy()
 
         return generated[:cur_len], gen_len
 

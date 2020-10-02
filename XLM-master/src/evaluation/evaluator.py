@@ -8,6 +8,7 @@
 from logging import getLogger
 import os
 import subprocess
+import pickle as pkl
 from collections import OrderedDict
 import numpy as np
 import torch
@@ -26,6 +27,7 @@ def convert_to_text(batch, lengths, dico, params):
     """
     Convert a batch of sentences to a list of text sentences.
     """
+    sentences = []
     batch = batch.cpu().numpy()
     lengths = lengths.cpu().numpy()
 
@@ -33,7 +35,6 @@ def convert_to_text(batch, lengths, dico, params):
     assert lengths.max() == slen and lengths.shape[0] == bs
     assert (batch[0] == params.eos_index).sum() == bs
     assert (batch == params.eos_index).sum() == 2 * bs
-    sentences = []
 
     for j in range(bs):
         words = []
@@ -576,6 +577,9 @@ class EncDecEvaluator(Evaluator):
         xe_loss = 0
         n_valid = 0
 
+        # batches of info dumped from cross-attention layers
+        full_cross_att = []
+
         # store hypothesis to compute BLEU score
         if eval_bleu:
             hypothesis = []
@@ -625,19 +629,31 @@ class EncDecEvaluator(Evaluator):
                 else:
                     max_len = params.eval_max_len
                 if params.beam_size == 1:
-                    generated, lengths = decoder.generate(enc1, len1 + params.num_of_regions, lang2_id, max_len=max_len)
+                    generated, lengths = decoder.generate(
+                        enc1, len1 + params.num_of_regions, lang2_id,
+                        max_len=max_len)
                 else:
                     generated, lengths = decoder.generate_beam(
-                        enc1, len1 + params.num_of_regions, lang2_id, beam_size=params.beam_size,
+                        enc1, len1 + params.num_of_regions, lang2_id,
+                        max_len=max_len, beam_size=params.beam_size,
                         length_penalty=params.length_penalty,
-                        early_stopping=params.early_stopping,
-                        max_len=max_len
-                    )
-                hypothesis.extend(convert_to_text(generated, lengths, self.dico, params))
+                        early_stopping=params.early_stopping)
+
+                hyp = convert_to_text(generated, lengths, self.dico, params)
+                hypothesis.extend(hyp)
+                if len(decoder.cross_att) > 0:
+                    src_sent = convert_to_text(x1, len1, self.dico, params)
+                    decoder.cross_att['srcs'] = src_sent
+                    decoder.cross_att['hyps'] = hyp
+                    full_cross_att.append(decoder.cross_att)
 
         # compute perplexity and prediction accuracy
         scores['%s_%s-%s_mt_ppl' % (data_set, lang1, lang2)] = np.exp(xe_loss / n_words)
         scores['%s_%s-%s_mt_acc' % (data_set, lang1, lang2)] = 100. * n_valid / n_words
+
+        if params.dump_att_dict:
+            with open(f'{params.hyp_path}/{data_set}.pkl', 'wb') as f:
+                pkl.dump(full_cross_att, f)
 
         # compute BLEU
         if eval_bleu:

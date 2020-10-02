@@ -243,6 +243,8 @@ def get_parser():
                         help="run eval vlm")
     parser.add_argument("--eval_probes", type=str, default=None,
                         help="A mapping file to define what to mask")
+    parser.add_argument("--dump_att_dict", type=bool_flag, default=False,
+                        help="Dumps cross-attention weights into a .pkl file.")
     parser.add_argument("--zero_mask_emb", type=str, default=False,
                         help="Set [MASK] embedding to a zero-vector.")
 
