@@ -263,7 +263,7 @@ class Projector(nn.Module):
     """Image feature projection layer."""
     def __init__(self, params):
         super().__init__()
-        self.relu = params.visual_relu
+        self.relu = getattr(params, 'visual_relu', True)
         self.linear = nn.Linear(1536, params.emb_dim)
 
     def forward(self, input):
@@ -276,8 +276,9 @@ class RegionalEncodings(nn.Module):
     """Bounding-box projection for positional encodings of images."""
     def __init__(self, params):
         super().__init__()
-        self.relu = params.visual_relu
-        self.linear = nn.Linear(4, params.emb_dim, bias=False)
+        self.relu = getattr(params, 'visual_relu', True)
+        self.linear = nn.Linear(4, params.emb_dim,
+            bias=getattr(params, 'reg_enc_bias', True))
 
     def forward(self, input):
         x = torch.from_numpy(input).cuda()
@@ -311,9 +312,9 @@ class TransformerModel(nn.Module):
         self.id2lang = params.id2lang
         self.lang2id = params.lang2id
         self.batch_size = params.batch_size
-        self.scale_emb = params.scale_emb
+        self.scale_emb = getattr(params, 'scale_emb', False)
         self.use_lang_emb = getattr(params, 'use_lang_emb', True)
-        self.visual_first = params.visual_first
+        self.visual_first = getattr(params, 'visual_first', False)
         assert len(self.dico) == self.n_words
         assert len(self.id2lang) == len(self.lang2id) == self.n_langs
         self.projector = Projector(params)
@@ -324,7 +325,7 @@ class TransformerModel(nn.Module):
         self.n_heads = params.n_heads   # 8 by default
         self.n_layers = params.n_layers
         self.dropout = params.dropout
-        self.v_dropout = params.visual_dropout
+        self.v_dropout = getattr(params, 'visual_dropout', 0.0)
         self.attention_dropout = params.attention_dropout
         assert self.dim % self.n_heads == 0, 'transformer dim must be a multiple of n_heads'
 
@@ -341,7 +342,7 @@ class TransformerModel(nn.Module):
         self.layer_norm_emb = nn.LayerNorm(self.dim, eps=1e-12)
 
         self.layer_norm_vis = lambda x: x
-        if params.visual_lnorm:
+        if getattr(params, 'visual_lnorm', False):
             self.layer_norm_vis = nn.LayerNorm(self.dim, eps=1e-12)
 
         # transformer layers

@@ -35,6 +35,8 @@ def get_parser():
                         help="Experiment dump path")
     parser.add_argument("--region_feats_path", type=str, default="/data/shared/ConceptualCaptions/fastrcnn_features_36/",
                         help="Path of the image region features.")
+    parser.add_argument("--reg_enc_bias", type=bool_flag, default=True,
+                        help="Enable bias for regional encodings.")
     parser.add_argument("--image_names", type=str, default="./data/conceptual_captions/",
                         help="Path of the image feature names.")
     parser.add_argument("--num_of_regions", type=int, default=36,

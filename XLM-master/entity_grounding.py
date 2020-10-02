@@ -6,13 +6,14 @@ import pickle
 import string
 from pathlib import Path
 from heapq import heappush
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 
 from src.utils import AttrDict, to_cuda
 from src.data.dictionary import Dictionary
 from src.model.transformer import TransformerModel, get_masks
 
 import numpy as np
+import tqdm
 
 import torch
 import torch.nn.functional as F
@@ -36,23 +37,27 @@ import fastBPE
 
 
 def reorder_and_normalize_boxes(box_list, width, height, normcoords):
+    # original order: xmin, ymin, xmax, ymax
+    # required order: ymin, xmin, ymax, xmax (1, 0, 3, 2)
     new_box_list = []
+
     # for checking validity
-    normc = ['|'.join(map(lambda x: f'{x:.3f}', xx)) for xx in normcoords]
+    normc = ['|'.join(map(lambda x: f'{x:.5f}', xx)) for xx in normcoords]
+    nc = np.array(normcoords)
 
     for box in box_list:
         xmin, ymin, xmax, ymax = box
         new_box_list.append(
             [ymin / height, xmin / width, ymax / height, xmax / width])
-        _str = '|'.join(map(lambda x: f'{x:.3f}', new_box_list[-1]))
-        assert _str in normc
+        _str = '|'.join(map(lambda x: f'{x:.5f}', new_box_list[-1]))
+        assert _str in normc or \
+            np.abs(nc - np.array(new_box_list[-1])).sum(1).min() < 1e-5
 
     return new_box_list
 
 
-
 def fwd(model, x, lengths, causal, params,
-        positions=None, langs=None, image_langs=None, cache=None,
+        positions=None, langs=None, image_langs=None,
         image_feats=None, bboxes=None, result_dict=None, phrase_indices=None,
         labels=None, results_dict=None, mx_heap=None,
         activity_dict=None, im_name=None):
@@ -80,44 +85,45 @@ def fwd(model, x, lengths, causal, params,
     if langs is not None:
         langs = langs.transpose(0, 1)
 
-    # do not recompute cached elements
-    if cache is not None:
-        _slen = slen - cache['slen']
-        x = x[:, -_slen:]
-        positions = positions[:, -_slen:]
-        if langs is not None:
-            langs = langs[:, -_slen:]
-        mask = mask[:, -_slen:]
-        attn_mask = attn_mask[:, -_slen:]
-
     tensor = model.embeddings(x)
 
-    if params.scale_emb:
+    if model.scale_emb:
         # scale embeddings w.r.t pos embs
         tensor.mul_(tensor.size(-1) ** 0.5)
 
     # Prepare linguistic tensor
-    tensor = tensor + model.position_embeddings(positions).expand_as(tensor)
+    txt_pos_emb = model.position_embeddings(positions).expand_as(tensor)
+    lang_emb = None
     if langs is not None and model.use_lang_emb:
-        tensor = tensor + model.lang_embeddings(langs)
-    tensor = model.layer_norm_emb(tensor)
+        lang_emb = model.lang_embeddings(langs)
+
+    _tensor = tensor + txt_pos_emb
+    if lang_emb is not None:
+        _tensor += lang_emb
+
+    tensor = model.layer_norm_emb(_tensor)
     tensor = F.dropout(tensor, p=model.dropout, training=model.training)
     tensor *= mask.unsqueeze(-1).to(tensor.dtype)
 
     # Prepare image tensor
-    feats = model.projector(image_feats) + model.regional_encodings(bboxes) + \
-            model.lang_embeddings(image_langs.t())
+    feats = model.projector(image_feats)
+    img_pos_emb = model.regional_encodings(bboxes)
+    img_lang_emb = model.lang_embeddings(image_langs.t())
+    _feats = feats + img_pos_emb + img_lang_emb
+
+    # is a no-op, if it was not enabled during training
+    feats = model.layer_norm_vis(_feats)
 
     # Apply visual dropout if any
-    if params.visual_dropout > 0:
-        feats = F.dropout(feats, p=params.visual_dropout, training=model.training)
+    if model.v_dropout > 0:
+        feats = F.dropout(feats, p=model.v_dropout, training=model.training)
 
     # Image masks
     img_mask = torch.ones([mask.shape[0], image_feats.shape[1]]).type_as(mask)
     img_attn_mask = img_mask.clone()
 
     # concatenate: put image sequence first
-    if params.visual_first:
+    if model.visual_first:
         mask = torch.cat((img_mask, mask), dim=1)
         attn_mask = torch.cat((img_attn_mask, attn_mask), dim=1)
         tensor = torch.cat((feats, tensor), dim=1)
@@ -129,30 +135,35 @@ def fwd(model, x, lengths, causal, params,
 
     # transformer layers
     for i in range(model.n_layers):
-        total_attns = None
+        total_attns = 0.0
+        preds = tensor.new_zeros((model.n_heads, len(phrase_indices), bboxes.shape[1]))
 
         # self attention
-        attn, weights = model.attentions[i](tensor, attn_mask, cache=cache)
+        attn, weights = model.attentions[i](tensor, attn_mask)
+        attn = F.dropout(attn, p=model.dropout, training=model.training)
+        tensor = tensor + attn
+        tensor = model.layer_norm1[i](tensor)
+        tensor = tensor + model.ffns[i](tensor)
+        tensor = model.layer_norm2[i](tensor)
+        tensor *= mask.unsqueeze(-1).to(tensor.dtype)
 
-        # TODO: These should probably change with `params.visual_first` !
         weights.squeeze_(0)
-        print(weights.shape, lengths.max(), bboxes.shape)
-        if params.visual_first:
-            box_attns = weights[..., -lengths.max().item()::]
+
+        # slice visual part
+        if model.visual_first:
+            # n_heads, n_total_embs, n_visual_embs
+            box_attns = weights[..., :bboxes.shape[1]]
+            pos_offset = bboxes.shape[1]
         else:
-            box_attns = weights[..., lengths.max().item()::]
-        preds = torch.zeros(model.n_heads, len(phrase_indices), bboxes.shape[1])
+            # n_heads, n_total_embs, n_visual_embs
+            box_attns = weights[..., lengths[0]:]
+            pos_offset = 0
 
         for head in range(model.n_heads):
-            for p, inds in enumerate(phrase_indices):
-                inds = inds.long()
-                mx = box_attns[head, inds, :].mean(0).argmax()
-                preds[head, p, mx] = 1
-
-                if total_attns is None:
-                    total_attns = box_attns[head, inds, :].mean(0).sum(0)
-                else:
-                    total_attns += box_attns[head, inds, :].mean(0).sum(0)
+            for p, pos in enumerate(phrase_indices):
+                img_att = box_attns[head, pos + pos_offset, :]
+                preds[head, p, img_att.argmax()] = 1
+                total_attns += img_att.sum()
 
             total_attns /= bboxes.shape[1]
             acc = (preds[head] * labels).nonzero(as_tuple=True)[0].shape[0] / preds[head].shape[0]
@@ -160,34 +171,7 @@ def fwd(model, x, lengths, causal, params,
             key = f"layer:{i} head:{head}"
             results_dict[key] += acc
             activity_dict[key] += total_attns.item()
-            heappush(mx_heap[key], (acc, im_name))
 
-        tensor = tensor + attn
-        tensor = model.layer_norm1[i](tensor)
-        tensor = tensor + model.ffns[i](tensor)
-        tensor = model.layer_norm2[i](tensor)
-        tensor *= mask.unsqueeze(-1).to(tensor.dtype)
-
-    # update cache length
-    if cache is not None:
-        cache['slen'] += tensor.size(1)
-
-
-def find_pred_indices(word_ids, x, visited):
-    temp = []
-    pred_indices = []
-    for i, ind in enumerate(x.transpose(1, 0)[0]):
-        if ind.item() != word_ids[len(temp)]:
-            temp = []
-            continue
-        temp.append(i)
-        if len(temp) == word_ids.shape[0]:
-            if str(temp) not in visited:
-                pred_indices = pred_indices + temp
-                visited[str(temp)] = True
-                break
-            temp = []
-    return pred_indices
 
 
 def main():
@@ -215,10 +199,9 @@ def main():
     word2id = dico.word2id
 
     model = TransformerModel(params, dico, is_encoder=True, with_output=True).cuda()
-    model.load_state_dict(reloaded['model'])
+    model.load_state_dict(reloaded['model'], strict=False)
     model = model.eval()
     torch.set_grad_enabled(False)
-    print(model)
 
     h = {}
     feats = {}
@@ -238,93 +221,92 @@ def main():
             feats[fname.name] = pickle.load(f)
 
     n_feats = len(feats)
-
     heads = []
 
-    for fidx, (fname, feat) in enumerate(feats.items()):
+    for fidx, (fname, feat) in enumerate(tqdm.tqdm(feats.items())):
         annots = feat["annotations"]
+        boxes = annots["boxes"]
+        width, height = annots["width"], annots["height"]
+        sents = feat["sents"]
+        feats = feat["feats"]
+        cords = feat["normalized_coords"]
 
-        for i, asent in enumerate(feat["sents"]):
-            bboxes = []
-            all_boxes = []
-            boxes_to_take = []
-            phrases_to_predict = []
-            labels = OrderedDict()
+        all_boxes = []
+        # gather all boxes
+        for xes in boxes.values():
+            for b in xes:
+                all_boxes.append(b)
 
-            im_name = f'{fname}|{i}'
-
+        for i, asent in enumerate(sents):
             sent_tok = asent["sentence"].lower()
             sent_bpe = bpe.apply([sent_tok])[0]
             if sent_tok != sent_bpe:
                 # skip segmented captions for simplifying processing
-                print(f'[{fidx}/{n_feats}]   [Skipping] {sent_bpe!r}')
                 continue
-            else:
-                print(f'[{fidx}/{n_feats}] [Processing] {sent_tok!r}')
 
-            idxs = [params.eos_index] + [word2id[z] for z in sent_tok.split()] + [params.eos_index]
-            idxs = torch.LongTensor(idxs).unsqueeze(1)
 
-            for xes in list(annots["boxes"].values()):
-                for b in xes:
-                    all_boxes.append(b)
+            bboxes = []
+            boxes_to_take = []
+            labels = defaultdict(list)
+            phrases_to_predict = []
+            im_name = f'{fname}|{i}'
+            sent_words = sent_tok.split()
 
-            for z, phrase_d in enumerate(asent["phrases"]):
+            for phrase_d in asent["phrases"]:
                 phrase = phrase_d["phrase"]
                 phrase_id = phrase_d["phrase_id"]
-                if phrase_id in annots["boxes"]:
-                    for box in annots["boxes"][phrase_id]:
-                        boxes_to_take.append(all_boxes.index(box))
-                        bboxes.append(box)
+                # starting pos in sent_tok.split()
+                first_idx = phrase_d["first_word_index"]
 
-                        if len(phrases_to_predict) not in labels:
-                            labels[len(phrases_to_predict)] = [len(boxes_to_take) - 1]
-                        else:
-                            labels[len(phrases_to_predict)].append(len(boxes_to_take) - 1)
+                if phrase_id not in boxes:
+                    # no associated bbox with this phrase
+                    continue
 
-                    # append head noun
-                    words = phrase.lower().split()
-                    # sometimes there's a punctuation at end..
-                    head = words[-1] if not words[-1].endswith(PUNCS) else words[-2]
-                    # check again
-                    assert head[-1] not in '.,;!?'
-                    # use it
-                    phrases_to_predict.append(head)
+                # split phrase words
+                head = phrase.lower().split()[-1]
+
+                # sometimes there's a punctuation at end.
+                if head.endswith(PUNCS):
+                    continue
+
+                for box in boxes[phrase_id]:
+                    boxes_to_take.append(all_boxes.index(box))
+                    bboxes.append(box)
+                    labels[len(phrases_to_predict)].append(len(boxes_to_take) - 1)
+
+                # add position offset'ed by <EOS>
+                pos = sent_words[first_idx:].index(head) + first_idx + 1
+                assert sent_words[pos - 1] == head
+                phrases_to_predict.append((pos, head))
 
             if len(boxes_to_take) == 0:
+                # no box found for this caption
                 continue
 
+            # bbox features
+            image_feats = feats[np.array(boxes_to_take)][None]
+
+            # bbox coordinates to pass to the model (should be normalized!)
+            bboxes = reorder_and_normalize_boxes(
+                bboxes, width, height, cords.tolist())
+            image_regions = np.array(bboxes, dtype=np.float32)[None]
+
+            # modality embs
+            idxs = [params.eos_index] + [word2id[z] for z in sent_words] + [params.eos_index]
+            idxs = torch.LongTensor(idxs).unsqueeze(1)
+            langs = idxs.clone().fill_(params.lang2id["en"]).long()
+            image_langs = torch.empty((image_feats.shape[1], 1)).fill_(params.lang2id['img']).long()
+            lengths = torch.LongTensor([idxs.shape[0]])
+            phrase_indices = [w[0] for w in phrases_to_predict]
+
             # n_phrases X box indicators
-            one_hot_labels = torch.zeros(
-                len(phrases_to_predict), len(boxes_to_take))
+            one_hot_labels = torch.zeros(len(phrases_to_predict), len(boxes_to_take))
             for key in labels:
                 for bx in labels[key]:
                     one_hot_labels[key][bx] = 1
 
-            # bbox features
-            image_feats = np.expand_dims(feat["feats"][np.array(boxes_to_take)], 0)
-
-            # bbox coordinates to pass to the model (should be normalized!)
-            # original order: xmin, ymin, xmax, ymax
-            # required order: ymin, xmin, ymax, xmax (1, 0, 3, 2)
-            normc = feat['normalized_coords'].tolist()
-            bboxes = reorder_and_normalize_boxes(bboxes, annots['width'], annots['height'], normc)
-            image_regions = np.expand_dims(np.array(bboxes, dtype=np.float32), 0)
-
-            # modality embs
-            langs = idxs.new(idxs.shape[0], 1).fill_(params.lang2id["en"]).long()
-            image_langs = torch.empty((image_feats.shape[1], 1)).fill_(params.lang2id['img']).long()
-            lengths = torch.LongTensor([idxs.shape[0]])
-
-            x, lengths, image_langs, langs, labels = to_cuda(
+            x, lengths, image_langs, langs, one_hot_labels = to_cuda(
                 idxs, lengths, image_langs, langs, one_hot_labels)
-
-            # NOTE: May be unnecessary after removing BPE'd sents
-            visited = {}
-            phrases_to_predict = [phr.split() for phr in phrases_to_predict]
-            phrase_ids = [np.array([word2id[qt] for qt in zt]) for zt in phrases_to_predict]
-            phrase_indices = [torch.LongTensor(np.array(find_pred_indices(phr, idxs, visited))) for phr in
-                              phrase_ids]
 
             ###################
             # model entry point
@@ -333,7 +315,7 @@ def main():
                 langs=langs, image_langs=image_langs,
                 image_feats=image_feats, bboxes=image_regions,
                 phrase_indices=phrase_indices, labels=one_hot_labels,
-                results_dict=results_dict, mx_heap=h,
+                results_dict=results_dict,
                 im_name=im_name, activity_dict=activity_dict)
 
             total_sentences_processed += 1
@@ -351,15 +333,16 @@ def main():
 
     random_acc = total_sentences_processed / total_regions_processed
     print('Chance-level: ', random_acc)
+    print('Avg acc: ', np.array(list(results_dict.values())).mean())
 
     res_file = open("results_multi.pkl", "wb")
     pickle.dump(results_dict, res_file)
     res_file.close()
 
-    heap_file = open("heap_multi.pkl", "wb")
-    pickle.dump(h, heap_file)
-    heap_file.close()
-
+    for i in range(model.n_layers):
+        accs = np.array([v for k, v in results_dict.items() if k.startswith(f'layer:{i} ')])
+        acts = np.array([v for k, v in activity_dict.items() if k.startswith(f'layer:{i} ')])
+        print(f'Layer {i}: avg. acc: {accs.mean():.3f} avg. act: {acts.mean():.3f}')
 
 if __name__ == "__main__":
     main()
