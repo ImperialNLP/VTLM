@@ -507,6 +507,7 @@ class Trainer(object):
             pred_mask = np.random.rand(slen, bs) <= params.word_pred
             pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
         else:
+            # FIXME: mask_Scores is text specific
             x_prob = params.mask_scores[x.flatten()]
             n_tgt = math.ceil(params.word_pred * slen * bs)
             tgt_ids = np.random.choice(len(x_prob), n_tgt, replace=False, p=x_prob / x_prob.sum())
