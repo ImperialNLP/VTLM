@@ -49,6 +49,7 @@ def reorder_and_normalize_boxes(box_list, width, height, normcoords):
         xmin, ymin, xmax, ymax = box
         new_box_list.append(
             [ymin / height, xmin / width, ymax / height, xmax / width])
+        #new_box_list.append([ymin, xmin, ymax, xmax])
         _str = '|'.join(map(lambda x: f'{x:.5f}', new_box_list[-1]))
         assert _str in normc or \
             np.abs(nc - np.array(new_box_list[-1])).sum(1).min() < 1e-5
@@ -133,6 +134,8 @@ def fwd(model, x, lengths, causal, params,
         attn_mask = torch.cat((attn_mask, img_attn_mask), dim=1)
         tensor = torch.cat((tensor, feats), dim=1)
 
+    img_activity = np.zeros((model.n_layers, model.n_heads), dtype='float32')
+
     # transformer layers
     for i in range(model.n_layers):
         total_attns = 0.0
@@ -159,19 +162,26 @@ def fwd(model, x, lengths, causal, params,
             box_attns = weights[..., lengths[0]:]
             pos_offset = 0
 
+        atts = box_attns.contiguous().view(box_attns.shape[0], -1).mean(-1)
+        img_activity[i] = atts.cpu().numpy()
+
         for head in range(model.n_heads):
             for p, pos in enumerate(phrase_indices):
                 img_att = box_attns[head, pos + pos_offset, :]
-                preds[head, p, img_att.argmax()] = 1
+                max_att = img_att.argmax()
+                # NOTE: most of the visual attentions are very close to 0
+                preds[head, p, max_att] = 1 if img_att[max_att] >= (1 / box_attns.shape[1]) else 0
                 total_attns += img_att.sum()
 
-            total_attns /= bboxes.shape[1]
             acc = (preds[head] * labels).nonzero(as_tuple=True)[0].shape[0] / preds[head].shape[0]
 
             key = f"layer:{i} head:{head}"
             results_dict[key] += acc
+
+            total_attns /= bboxes.shape[1]
             activity_dict[key] += total_attns.item()
 
+    return img_activity
 
 
 def main():
@@ -181,6 +191,8 @@ def main():
     except IndexError:
         print(f'Usage: {sys.argv[0]} <.pth checkpoint file> <features path>')
         sys.exit(1)
+
+    np.set_printoptions(precision=4, suppress=True, linewidth=150)
 
     # fastBPE files
     bpe = fastBPE.fastBPE(CODES_PATH, VOCAB_PATH)
@@ -207,6 +219,7 @@ def main():
     feats = {}
     total_regions_processed = 0
     total_sentences_processed = 0
+    total_chance_level = 0.0
     results_dict = defaultdict(float)
     activity_dict = defaultdict(float)
 
@@ -222,6 +235,8 @@ def main():
 
     n_feats = len(feats)
     heads = []
+
+    img_activity = np.zeros((model.n_layers, model.n_heads), dtype='float32')
 
     for fidx, (fname, feat) in enumerate(tqdm.tqdm(feats.items())):
         annots = feat["annotations"]
@@ -243,7 +258,6 @@ def main():
             if sent_tok != sent_bpe:
                 # skip segmented captions for simplifying processing
                 continue
-
 
             bboxes = []
             boxes_to_take = []
@@ -311,7 +325,7 @@ def main():
             ###################
             # model entry point
             ###################
-            fwd(model, x, lengths, causal=False, params=params,
+            img_activity += fwd(model, x, lengths, causal=False, params=params,
                 langs=langs, image_langs=image_langs,
                 image_feats=image_feats, bboxes=image_regions,
                 phrase_indices=phrase_indices, labels=one_hot_labels,
@@ -319,6 +333,8 @@ def main():
                 im_name=im_name, activity_dict=activity_dict)
 
             total_sentences_processed += 1
+            n_positions = idxs.numel() + len(boxes_to_take)
+            total_chance_level += one_hot_labels.sum(-1).div(n_positions).sum().item()
             total_regions_processed += len(phrases_to_predict)
 
     # Dump results
@@ -331,9 +347,10 @@ def main():
             results_dict[key] /= total_sentences_processed
             activity_dict[key] /= total_sentences_processed
 
-    random_acc = total_sentences_processed / total_regions_processed
-    print('Chance-level: ', random_acc)
-    print('Avg acc: ', np.array(list(results_dict.values())).mean())
+#     random_acc = total_sentences_processed / total_regions_processed
+    # print('Chance-level: ', random_acc)
+    print('Chance-level: {:.3f}'.format(total_chance_level / total_regions_processed))
+    print('Avg acc: {:.3f}'.format(np.array(list(results_dict.values())).mean()))
 
     res_file = open("results_multi.pkl", "wb")
     pickle.dump(results_dict, res_file)
@@ -343,6 +360,11 @@ def main():
         accs = np.array([v for k, v in results_dict.items() if k.startswith(f'layer:{i} ')])
         acts = np.array([v for k, v in activity_dict.items() if k.startswith(f'layer:{i} ')])
         print(f'Layer {i}: avg. acc: {accs.mean():.3f} avg. act: {acts.mean():.3f}')
+
+    img_activity /= total_sentences_processed
+    print(img_activity)
+    print('layer avg. ', img_activity.mean(1))
+    print('head avg. ', img_activity.mean(0))
 
 if __name__ == "__main__":
     main()
