@@ -35,7 +35,7 @@ CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 
 if [ -z $EVAL_ONLY ]; then
   # train
-  python $TRAIN --beam_size ${BS} --exp_name mmt_2reg --dump_path ${DUMP_PATH} \
+  python $TRAIN --beam_size ${BS} --exp_name mmt_36reg --dump_path ${DUMP_PATH} \
     --data_path ${DATA_PATH} --encoder_only false \
     --lgs 'en-de' --mmt_step "en-de" --emb_dim 512 --n_layers 6 --n_heads 8 \
     --dropout '0.4' --attention_dropout '0.1' --gelu_activation true \
@@ -43,11 +43,11 @@ if [ -z $EVAL_ONLY ]; then
     --epoch_size ${EPOCH} --eval_bleu true --max_epoch 500 \
     --stopping_criterion 'valid_en-de_mmt_bleu,20' --validation_metrics 'valid_en-de_mmt_bleu' \
     --region_feats_path $FEAT_PATH --image_names ${DATA_PATH} \
-    --visual_dropout '0.0' --visual_first true --num_of_regions 2 $@
+    --visual_dropout '0.0' --visual_first true --num_of_regions 36 $@
 else
   NAME="${CKPT/.pth/}_beam${BS}/"
   for TEST_SET in test_2016_flickr test_2017_flickr test_2017_mscoco test_2018_flickr; do
-    python $TRAIN --beam_size ${BS} --exp_name $NAME --dump_path $DUMP_PATH \
+    echo python $TRAIN --beam_size ${BS} --exp_name $NAME --dump_path $DUMP_PATH \
       --data_path "${DATA_PATH}_${TEST_SET}" --encoder_only false \
       --lgs 'en-de' --mmt_step "en-de" --emb_dim 512 --n_layers 6 --n_heads 8 \
       --dropout '0.4' --attention_dropout '0.1' --gelu_activation true \
@@ -56,6 +56,6 @@ else
       --stopping_criterion 'valid_en-de_mmt_bleu,20' --validation_metrics 'valid_en-de_mmt_bleu' \
       --region_feats_path $FEAT_PATH --image_names ${DATA_PATH}_${TEST_SET} \
       --reload_model "${CKPT},${CKPT}" --eval_only true --eval_bleu true --exp_id ${TEST_SET} \
-      --visual_dropout '0.0' --visual_first true --num_of_regions 2 $@
+      --visual_dropout '0.0' --visual_first true --num_of_regions 36 $@
   done
 fi

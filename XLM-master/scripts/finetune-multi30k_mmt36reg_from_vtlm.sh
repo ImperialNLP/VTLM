@@ -35,7 +35,7 @@ DUMP_PATH="${DUMP_PATH}/${PREFIX}"
 
 CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 
-python $TRAIN --beam_size 1 --exp_name ${NAME} --dump_path ${DUMP_PATH} \
+ipython -i $TRAIN -- --beam_size 1 --exp_name ${NAME} --dump_path ${DUMP_PATH} \
   --reload_model "${CKPT},${CKPT}" --data_path ${DATA_PATH} --encoder_only false \
   --lgs 'en-de' --mmt_step "en-de" $PREV_ARGS \
   --dropout '0.2' --attention_dropout '0.1' --gelu_activation true \
