@@ -490,11 +490,15 @@ class TransformerModel(nn.Module):
         self.self_attn = {}
         for i in range(self.n_layers):
             attn, p_self = self.attentions[i](tensor, attn_mask, cache=cache)
+
             attn = F.dropout(attn, p=self.dropout, training=self.training)
             tensor = tensor + attn
             tensor = self.layer_norm1[i](tensor)
-            if not self.training:
+            if not self.is_decoder and not self.training:
+                # mask unnecessary attention weights
+                p_self.mul_(mask[:, None, :, None])
                 self.self_attn[i] = p_self.cpu().numpy()
+                avg_vis_att = self.self_attn[i][..., :36].sum() / (p_self.size(1) * mask.sum().item())
 
             # encoder attention (for decoder only)
             if self.is_decoder and src_enc is not None:
@@ -694,6 +698,9 @@ class TransformerModel(nn.Module):
 
         # cache compute states
         cache = {'slen': 0}
+
+        # store cross attention weights
+        self.cross_att = defaultdict(list)
 
         # done sentences
         done = [False for _ in range(bs)]
