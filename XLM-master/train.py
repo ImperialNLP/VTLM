@@ -102,8 +102,6 @@ def get_parser():
                         help="Run only vlm step")
     parser.add_argument("--load_vlm_mono", type=bool_flag, default=False,
                         help="Run only vlm step")
-    parser.add_argument("--mask_file_dir", type=str, default=None,
-                        help="dir contains masked files")
 
     # adaptive softmax
     parser.add_argument("--asm", type=bool_flag, default=False,

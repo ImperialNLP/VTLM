@@ -197,22 +197,6 @@ def load_vmono_data(params, data):
                     image_names.append(line)
                     existing_indices.append(i)
 
-            masked_tokens = None
-            masked_object_labels = None
-            if params.mask_file_dir:
-                masked_tokens = []
-                masked_object_labels = []
-                with open(os.path.join(params.mask_file_dir, f"mask.{splt}")) as masked_file:
-                    for info in masked_file.readlines():
-                        info = info.strip().split("\t")
-                        word_indices = []
-                        for w in info[2].split(","):
-                            for word in w.split():
-                                if word in data["dico"].word2id:
-                                    word_indices.append(data["dico"].word2id[word])
-                        masked_tokens.append(word_indices)
-                        masked_object_labels.append(info[1].split(","))
-
             set_dico_parameters(params, data, mono_data['dico'])
             existing_indices = np.array(existing_indices)
             logger.info(f'Found {existing_indices.size} image features')
@@ -221,8 +205,7 @@ def load_vmono_data(params, data):
 
             # create batched dataset
             dataset = DatasetWithRegions(
-                mono_data['sentences'], mono_data['positions'],
-                image_names, masked_tokens, masked_object_labels, params)
+                mono_data['sentences'], mono_data['positions'], image_names, params)
 
             # remove empty and too long sentences
             if splt == 'train':
@@ -348,22 +331,6 @@ def load_vpara_data(params, data):
                     image_names.append(line)
                     existing_indices.append(i)
 
-            masked_tokens = None
-            masked_object_labels = None
-            if params.mask_file_dir:
-                masked_tokens = []
-                masked_object_labels = []
-                with open(os.path.join(params.mask_file_dir, f"mask.{splt}")) as masked_file:
-                    for info in masked_file.readlines():
-                        info = info.strip().split("\t")
-                        word_indices = []
-                        for w in info[2].split(","):
-                            for word in w.split():
-                                if word in data["dico"].word2id:
-                                    word_indices.append(data["dico"].word2id[word])
-                        masked_tokens.append(word_indices)
-                        masked_object_labels.append(info[1].split(","))
-
             # update dictionary parameters
             set_dico_parameters(params, data, src_data['dico'])
             set_dico_parameters(params, data, tgt_data['dico'])
@@ -381,11 +348,7 @@ def load_vpara_data(params, data):
             dataset = ParallelDatasetWithRegions(
                 src_data['sentences'], src_data['positions'][existing_indices],
                 tgt_data['sentences'], tgt_data['positions'][existing_indices],
-                image_names,
-                masked_tokens,
-                masked_object_labels,
-                params
-            )
+                image_names, params)
 
             # remove empty and too long sentences
             if splt == 'train':

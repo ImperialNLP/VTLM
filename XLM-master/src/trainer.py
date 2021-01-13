@@ -635,7 +635,7 @@ class Trainer(object):
 
         if lang2 is not None:
             # vTLM
-            (masked_object_ids), (masked_tokens), (img_dict), (x1, len1), (x2, len2) = self.get_batch_vpara(name, lang1, lang2)
+            (img_dict), (x1, len1), (x2, len2) = self.get_batch_vpara(name, lang1, lang2)
             x, lengths, positions, langs = concat_batches(
                 x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index,
                 params.eos_index, reset_positions=True)
@@ -643,14 +643,14 @@ class Trainer(object):
                 (params.num_of_regions, len1.size(0))).long().fill_(img_id)
         else:
             # vMLM
-            (x, len1), (img_dict), (masked_tokens), (masked_object_ids) = self.get_batch_vpara(name, lang1, lang2)
+            (x, len1), (img_dict) = self.get_batch_vpara(name, lang1, lang2)
             langs = x.clone().fill_(lang1_id)
             image_langs = torch.empty(
                 (params.num_of_regions, len1.size(0))).long().fill_(img_id)
             lengths = len1
             positions = None
 
-        return x, lengths, positions, langs, image_langs, img_dict, masked_object_ids, masked_tokens, (None, None)
+        return x, lengths, positions, langs, image_langs, img_dict, (None, None)
 
     def save_checkpoint(self, name, include_optimizers=True):
         """
@@ -911,13 +911,13 @@ class Trainer(object):
         model.train()
 
         # generate batch / select words to predict
-        x, lengths, positions, langs, image_langs, img_dict, masked_object_ids, masked_tokens, _ = self.generate_batch_vpara(
+        x, lengths, positions, langs, image_langs, img_dict, _ = self.generate_batch_vpara(
             lang1, lang2, 'pred_object')
         x, lengths, positions, langs, _ = self.round_batch(x, lengths, positions, langs)
 
         # Get prediction masks
-        x, y, txt_pred_mask = self.mask_out(x, lengths, masked_tokens, langs)
-        img_x, img_y, img_pred_mask = self.mask_out_image(img_dict, masked_object_ids)
+        x, y, txt_pred_mask = self.mask_out(x, lengths)
+        img_x, img_y, img_pred_mask = self.mask_out_image(img_dict)
 
         # cuda
         x, y, txt_pred_mask, lengths, positions, langs = to_cuda(x, y, txt_pred_mask, lengths, positions, langs)

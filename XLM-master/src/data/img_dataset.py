@@ -29,8 +29,7 @@ def load_images(sentence_ids, feat_path, img_names, n_regions):
 
 class DatasetWithRegions(Dataset):
 
-    def __init__(self, sent, pos, image_names, masked_tokens,
-                 masked_object_labels, params):
+    def __init__(self, sent, pos, image_names, params):
         self.eos_index = params.eos_index
         self.pad_index = params.pad_index
         self.batch_size = params.batch_size
@@ -44,12 +43,6 @@ class DatasetWithRegions(Dataset):
         self.num_of_regions = params.num_of_regions
         self.region_features_path = params.region_feats_path
         self.image_names = np.array(image_names)
-        if masked_tokens is not None and masked_object_labels is not None:
-            self.masked_tokens = np.array(masked_tokens)
-            self.masked_object_labels = np.array(masked_object_labels)
-        else:
-            self.masked_tokens = None
-            self.masked_object_labels = None
 
         # check number of sentences
         assert len(self.pos) == (self.sent == self.eos_index).sum()
@@ -81,7 +74,6 @@ class DatasetWithRegions(Dataset):
             self.num_of_regions)
 
     def get_batches_iterator(self, batches, return_indices):
-        masked_tokens, masked_object_id = None, None
         for sentence_ids in batches:
             if 0 < self.max_batch_size < len(sentence_ids):
                 self._rng.shuffle(sentence_ids)
@@ -93,18 +85,14 @@ class DatasetWithRegions(Dataset):
             # Visual features dictionary
             img_data = self.load_images(sentence_ids)
 
-            if self.masked_tokens is not None and self.masked_object_labels is not None:
-                masked_tokens = self.masked_tokens[sentence_ids]
-                masked_object_id = self.masked_object_labels[sentence_ids]
-
             if return_indices:
-                yield (sent, img_data, masked_tokens, masked_object_id, sentence_ids)
+                yield (sent, img_data, sentence_ids)
             else:
-                yield (sent, img_data, masked_tokens, masked_object_id)
+                yield (sent, img_data)
 
 
 class ParallelDatasetWithRegions(ParallelDataset):
-    def __init__(self, sent1, pos1, sent2, pos2, image_names, masked_tokens, masked_object_labels, params):
+    def __init__(self, sent1, pos1, sent2, pos2, image_names, params):
         self.eos_index = params.eos_index
         self.pad_index = params.pad_index
         self.batch_size = params.batch_size
@@ -119,12 +107,6 @@ class ParallelDatasetWithRegions(ParallelDataset):
         self.num_of_regions = params.num_of_regions
         self.lengths1 = self.pos1[:, 1] - self.pos1[:, 0]
         self.lengths2 = self.pos2[:, 1] - self.pos2[:, 0]
-        if masked_tokens is not None and masked_object_labels is not None:
-            self.masked_tokens = np.array(masked_tokens)
-            self.masked_object_labels = np.array(masked_object_labels)
-        else:
-            self.masked_tokens = None
-            self.masked_object_labels = None
 
         # Set RNG
         self._rng = np.random.RandomState(seed=params.iter_seed)
@@ -152,7 +134,6 @@ class ParallelDatasetWithRegions(ParallelDataset):
             self.num_of_regions)
 
     def get_batches_iterator(self, batches, return_indices):
-        masked_tokens, masked_object_id = None, None
         for sentence_ids in batches:
             if 0 < self.max_batch_size < len(sentence_ids):
                 self._rng.shuffle(sentence_ids)
@@ -167,11 +148,7 @@ class ParallelDatasetWithRegions(ParallelDataset):
             # Visual features dictionary
             img_data = self.load_images(sentence_ids)
 
-            if self.masked_tokens is not None and self.masked_object_labels is not None:
-                masked_tokens = self.masked_tokens[sentence_ids]
-                masked_object_id = self.masked_object_labels[sentence_ids]
-
             if return_indices:
-                yield (sent1, sent2, img_data, masked_tokens, masked_object_id, sentence_ids)
+                yield (sent1, sent2, img_data, sentence_ids)
             else:
-                yield (sent1, sent2, img_data, masked_tokens, masked_object_id)
+                yield (sent1, sent2, img_data)

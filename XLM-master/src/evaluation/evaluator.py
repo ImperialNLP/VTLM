@@ -470,14 +470,14 @@ class Evaluator(object):
         for batch in self.get_iterator_vlm(data_set, lang1, lang2, stream=(lang2 is None)):
             if lang2 is None:
                 # vMLM
-                (x, len1), (img_dict), (masked_tokens), (masked_object_ids) = batch
+                (x, len1), (img_dict) = batch
                 langs = x.clone().fill_(lang1_id)
                 image_langs = torch.empty((params.num_of_regions, len1.size(0))).long().fill_(img_id)
                 lengths = len1
                 positions = None
             else:
                 # vTLM
-                (masked_object_ids), (masked_tokens), (img_dict), (x1, len1), (x2, len2) = batch
+                (img_dict), (x1, len1), (x2, len2) = batch
                 image_langs = torch.empty((params.num_of_regions, len1.size(0))).long().fill_(img_id)
                 x, lengths, positions, langs = concat_batches(
                     x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index,
