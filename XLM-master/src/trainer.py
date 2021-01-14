@@ -512,6 +512,7 @@ class Trainer(object):
             pred_mask = np.random.rand(slen, bs) <= params.word_pred
             pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
         else:
+            # mask_scores correctly avoids masking/predicting special tokens
             x_prob = params.mask_scores[x.flatten()]
             n_tgt = math.ceil(params.word_pred * slen * bs)
             tgt_ids = np.random.choice(len(x_prob), n_tgt, replace=False, p=x_prob / x_prob.sum())
@@ -521,19 +522,22 @@ class Trainer(object):
 
         # do not predict padding
         pred_mask[x == params.pad_index] = 0
-        # 0 is params.bos_index but it doesn't seem to be used
-        pred_mask[0] = 0  # TODO: remove
-        # NOTE: This does not remove </s> [id: 1]
 
-        # A better way for this (covers, BOS, EOS and PAD)
+        # this only avoids masking predicting first </s>'s (EOSs) in each sequence
+        pred_mask[0] = 0
+
+        # A better and combined way for this (covers, BOS, EOS and PAD)
+        # this will also avoid masking predicting other </s> in the sequences
         #pred_mask[x <= params.pad_index] = False
 
-        # A more sound way to avoid all special tokens to be masked
-        #pred_mask[x.lt(14)] = False
-
         # generate possible targets / update x input
+        # an overlay with input itself
         _x_real = x[pred_mask]
+
+        # an overlay with randomized inputs
         _x_rand = _x_real.clone().random_(params.n_words)
+
+        # an overlay with masked inputs
         _x_mask = _x_real.clone().fill_(params.mask_index)
         probs = torch.multinomial(params.pred_probs, len(_x_real), replacement=True)
         _x = _x_mask * (probs == 0).long() + _x_real * (probs == 1).long() + _x_rand * (probs == 2).long()
