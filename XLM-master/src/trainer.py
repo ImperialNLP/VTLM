@@ -491,17 +491,13 @@ class Trainer(object):
         x = x.t()
         slen, bs = x.size()
 
-        if params.sample_alpha == 0:
-            pred_mask = np.random.rand(slen, bs) <= params.word_pred
-            pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
-        else:
-            # FIXME: mask_Scores is text specific
-            x_prob = params.mask_scores[x.flatten()]
-            n_tgt = math.ceil(params.word_pred * slen * bs)
-            tgt_ids = np.random.choice(len(x_prob), n_tgt, replace=False, p=x_prob / x_prob.sum())
-            pred_mask = torch.zeros(slen * bs, dtype=torch.bool)
-            pred_mask[tgt_ids] = 1
-            pred_mask = pred_mask.view(slen, bs)
+        # FIXME: mask_Scores is text specific
+        x_prob = params.mask_scores[x.flatten()]
+        n_tgt = math.ceil(params.word_pred * slen * bs)
+        tgt_ids = np.random.choice(len(x_prob), n_tgt, replace=False, p=x_prob / x_prob.sum())
+        pred_mask = torch.zeros(slen * bs, dtype=torch.bool)
+        pred_mask[tgt_ids] = 1
+        pred_mask = pred_mask.view(slen, bs)
 
         # do not predict padding
         # pad index might be class number in our case
