@@ -129,7 +129,7 @@ def get_parser():
                         help="Fraction of regions for which we need to make a prediction")
     parser.add_argument("--region_mask_keep_rand", type=str, default="0.8,0.1,0.1",
                         help="Fraction of regions to mask out / keep / randomize, among the regions to predict")
-    parser.add_argument("--region_mask_type", type=str, default="mask", choices=["mask", "zero"],
+    parser.add_argument("--region_mask_type", type=str, default="zero", choices=["mask", "zero"],
                         help="Whether to re-use [MASK] embedding or a zero-vector for masked out regions")
 
     # input sentence noise

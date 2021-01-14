@@ -322,6 +322,7 @@ class TransformerModel(nn.Module):
         self.n_layers = params.n_layers
         self.dropout = params.dropout
         self.v_dropout = getattr(params, 'visual_dropout', 0.0)
+        self.reg_mask_type = params.region_mask_type
         self.attention_dropout = params.attention_dropout
         assert self.dim % self.n_heads == 0, 'transformer dim must be a multiple of n_heads'
 
@@ -384,7 +385,7 @@ class TransformerModel(nn.Module):
     def fwd(self, x, lengths, causal,
             src_enc=None, src_len=None,
             positions=None, langs=None, image_langs=None, cache=None,
-            img_boxes=None, img_feats=None, img_labels=None):
+            img_boxes=None, img_feats=None, img_mask_pos=None):
         """
         Inputs:
             `x` LongTensor(slen, bs), containing word indices
@@ -455,8 +456,21 @@ class TransformerModel(nn.Module):
             img_mask = mask.new_ones((mask.size(0), self.num_of_regions))
             img_attn_mask = img_mask.clone()
 
-            feats = self.projector(img_feats) + self.regional_encodings(img_boxes) + \
-                self.lang_embeddings(image_langs.t())
+            # project features
+            img_feats = self.projector(img_feats)
+
+            if self.reg_mask_type == 'mask':
+                # replace zero-ed out regions with <MASK> embedding
+                mask_emb = self.embeddings.weight[self.mask_index]
+                # masked_scatter fills from source tensor in an ordered way
+                # expand the embedding vector into a matrix, so that it always
+                # fetches the embedding
+                img_feats.masked_scatter_(
+                    img_mask_pos,
+                    mask_emb.expand(int(img_mask_pos.sum()), -1))
+
+            feats = img_feats + self.regional_encodings(img_boxes)
+            feats += self.lang_embeddings(image_langs.t())
 
             # enabled through `--visual_lnorm true`
             feats = self.layer_norm_vis(feats)
