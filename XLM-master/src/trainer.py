@@ -534,21 +534,21 @@ class Trainer(object):
 
         # generate possible targets / update x input
         # an overlay with input itself
-        _x_real = x[pred_mask]
+        y = x[pred_mask]
 
         # an overlay with randomized inputs
-        _x_rand = _x_real.clone().random_(self.params.n_words)
+        _x_rand = y.clone().random_(self.params.n_words)
 
         # an overlay with masked inputs
-        _x_mask = _x_real.clone().fill_(self.params.mask_index)
+        _x_mask = y.clone().fill_(self.params.mask_index)
 
         # sample probabilities for three types of masking: mask, keep, rand
         probs = torch.multinomial(
-            self.params.word_pred_probs, len(_x_real), replacement=True)
+            self.params.word_pred_probs, len(y), replacement=True)
 
         # blend the overlays accordingly to form the final masked input
         _x = _x_mask.mul(probs.eq(0).long()) + \
-            _x_real.mul(probs.eq(1).long()) + \
+            y.mul(probs.eq(1).long()) + \
             _x_rand.mul(probs.eq(2).long())
 
         x = x.masked_scatter(pred_mask, _x)
@@ -557,7 +557,7 @@ class Trainer(object):
         assert x.size() == (slen, bs)
         assert pred_mask.size() == (slen, bs)
 
-        return x, _x_real, pred_mask
+        return x, y, pred_mask
 
     def mask_out_image(self, img_boxes, img_feats, img_labels):
         """Mask random image features out of a sequence, similar to text
@@ -571,26 +571,26 @@ class Trainer(object):
         pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
 
         # an overlay with real prediction labels
-        _x_real = x[pred_mask]
+        y = x[pred_mask]
 
         # an overlay with randomized labels
         # NOTE: hard to implement at input side!
-        _x_rand = _x_real.clone().random_(self.params.num_obj_labels)
+        _x_rand = y.clone().random_(self.params.num_obj_labels)
 
         # an overlay with masked inputs
-        _x_mask = _x_real.clone().fill_(self.params.mask_index)
+        _x_mask = y.clone().fill_(self.params.mask_index)
 
         probs = torch.multinomial(
-            self.params.region_pred_probs, len(_x_real), replacement=True)
+            self.params.region_pred_probs, len(y), replacement=True)
 
         # blend the overlays accordingly to form the final masked input
         _x = _x_mask.mul(probs.eq(0).long()) + \
-            _x_real.mul(probs.eq(1).long()) + \
+            y.mul(probs.eq(1).long()) + \
             _x_rand.mul(probs.eq(2).long())
 
         img_labels = x.masked_scatter(pred_mask, _x)
 
-        return img_boxes, img_feats, img_labels, _x_real, pred_mask
+        return img_boxes, img_feats, img_labels, y, pred_mask
 
     def generate_batch(self, lang1, lang2, name):
         """
