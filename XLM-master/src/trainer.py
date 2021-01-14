@@ -501,43 +501,6 @@ class Trainer(object):
         words, lengths = self.word_blank(words, lengths)
         return words, lengths
 
-    def mask_out_image(self, img_dict):
-        params = self.params
-
-        x = torch.from_numpy(
-            get_image_properties(img_dict, "detection_classes").astype('int64'))
-        x = x.t()
-        slen, bs = x.size()
-
-        # FIXME: mask_Scores is text specific
-        x_prob = params.mask_scores[x.flatten()]
-        n_tgt = math.ceil(params.word_pred * slen * bs)
-        tgt_ids = np.random.choice(len(x_prob), n_tgt, replace=False, p=x_prob / x_prob.sum())
-        pred_mask = torch.zeros(slen * bs, dtype=torch.bool)
-        pred_mask[tgt_ids] = 1
-        pred_mask = pred_mask.view(slen, bs)
-
-        # do not predict padding
-        # pad index might be class number in our case
-        # pred_mask[x == params.pad_index] = 0
-        # pred_mask[x == params.bor_index] = 0
-        # pred_mask[x == params.eor_index] = 0
-
-        # pred_mask[0] = 0  # TODO: remove
-
-        # generate possible targets / update x input
-        _x_real = x[pred_mask]
-        _x_rand = _x_real.clone().random_(params.num_of_classes)
-        _x_mask = _x_real.clone().fill_(params.mask_index)
-        probs = torch.multinomial(params.pred_probs, len(_x_real), replacement=True)
-        _x = _x_mask * (probs == 0).long() + _x_real * (probs == 1).long() + _x_rand * (probs == 2).long()
-        x = x.masked_scatter(pred_mask, _x)
-
-        assert 0 <= x.min() <= x.max() < params.n_words
-        assert x.size() == (slen, bs)
-        assert pred_mask.size() == (slen, bs)
-        return x, _x_real, pred_mask
-
     def mask_out(self, x, lengths):
         """
         Decide of random words to mask out, and what target they get assigned.
@@ -580,6 +543,45 @@ class Trainer(object):
         assert x.size() == (slen, bs)
         assert pred_mask.size() == (slen, bs)
 
+        return x, _x_real, pred_mask
+
+
+
+    def mask_out_image(self, img_dict):
+        params = self.params
+
+        x = torch.from_numpy(
+            get_image_properties(img_dict, "detection_classes").astype('int64'))
+        x = x.t()
+        slen, bs = x.size()
+
+        # FIXME: mask_Scores is text specific
+        x_prob = params.mask_scores[x.flatten()]
+        n_tgt = math.ceil(params.word_pred * slen * bs)
+        tgt_ids = np.random.choice(len(x_prob), n_tgt, replace=False, p=x_prob / x_prob.sum())
+        pred_mask = torch.zeros(slen * bs, dtype=torch.bool)
+        pred_mask[tgt_ids] = 1
+        pred_mask = pred_mask.view(slen, bs)
+
+        # do not predict padding
+        # pad index might be class number in our case
+        # pred_mask[x == params.pad_index] = 0
+        # pred_mask[x == params.bor_index] = 0
+        # pred_mask[x == params.eor_index] = 0
+
+        # pred_mask[0] = 0  # TODO: remove
+
+        # generate possible targets / update x input
+        _x_real = x[pred_mask]
+        _x_rand = _x_real.clone().random_(params.num_of_classes)
+        _x_mask = _x_real.clone().fill_(params.mask_index)
+        probs = torch.multinomial(params.pred_probs, len(_x_real), replacement=True)
+        _x = _x_mask * (probs == 0).long() + _x_real * (probs == 1).long() + _x_rand * (probs == 2).long()
+        x = x.masked_scatter(pred_mask, _x)
+
+        assert 0 <= x.min() <= x.max() < params.n_words
+        assert x.size() == (slen, bs)
+        assert pred_mask.size() == (slen, bs)
         return x, _x_real, pred_mask
 
     def generate_batch(self, lang1, lang2, name):
