@@ -119,8 +119,20 @@ class Trainer(object):
                 [('MLM-%s-%s' % (l1, l2), []) for l1, l2 in d.keys()] +
                 [('MLM-%s-%s' % (l2, l1), []) for l1, l2 in d.keys()] +
                 [('VLM-%s' % ll, []) for ll in params.langs] +
+                [('VLM-%s-tloss' % ll, []) for ll in params.langs] +
+                [('VLM-%s-tacc' % ll, []) for ll in params.langs] +
+                [('VLM-%s-vloss' % ll, []) for ll in params.langs] +
+                [('VLM-%s-vacc' % ll, []) for ll in params.langs] +
                 [('VLM-%s-%s' % (l1, l2), []) for l1, l2 in d.keys()] +
+                [('VLM-%s-%s-tloss' % (l1, l2), []) for l1, l2 in d.keys()] +
+                [('VLM-%s-%s-tacc' % (l1, l2), []) for l1, l2 in d.keys()] +
+                [('VLM-%s-%s-vloss' % (l1, l2), []) for l1, l2 in d.keys()] +
+                [('VLM-%s-%s-vacc' % (l1, l2), []) for l1, l2 in d.keys()] +
                 [('VLM-%s-%s' % (l2, l1), []) for l1, l2 in d.keys()] +
+                [('VLM-%s-%s-tloss' % (l2, l1), []) for l1, l2 in d.keys()] +
+                [('VLM-%s-%s-tacc' % (l2, l1), []) for l1, l2 in d.keys()] +
+                [('VLM-%s-%s-vloss' % (l2, l1), []) for l1, l2 in d.keys()] +
+                [('VLM-%s-%s-vacc' % (l2, l1), []) for l1, l2 in d.keys()] +
                 [('PC-%s-%s' % (l1, l2), []) for l1, l2 in params.pc_steps] +
                 [('AE-%s' % lang, []) for lang in params.ae_steps] +
                 [('MT-%s-%s' % (l1, l2), []) for l1, l2 in params.mt_steps] +
@@ -132,7 +144,13 @@ class Trainer(object):
                 [('processed_s', 0), ('processed_w', 0)] +
                 [('CLM-%s' % ll, []) for ll in params.langs] +
                 [('MLM-%s' % ll, []) for ll in params.langs] +
+                [('MLM-%s-tloss' % ll, []) for ll in params.langs] +
+                [('MLM-%s-tacc' % ll, []) for ll in params.langs] +
                 [('VLM-%s' % ll, []) for ll in params.langs] +
+                [('VLM-%s-tloss' % ll, []) for ll in params.langs] +
+                [('VLM-%s-tacc' % ll, []) for ll in params.langs] +
+                [('VLM-%s-vloss' % ll, []) for ll in params.langs] +
+                [('VLM-%s-vacc' % ll, []) for ll in params.langs] +
                 [('PC-%s-%s' % (l1, l2), []) for l1, l2 in params.pc_steps] +
                 [('AE-%s' % lang, []) for lang in params.ae_steps] +
                 [('MT-%s-%s' % (l1, l2), []) for l1, l2 in params.mt_steps] +
@@ -540,7 +558,15 @@ class Trainer(object):
 
         # do not predict padding
         pred_mask[x == params.pad_index] = 0
+        # 0 is params.bos_index but it doesn't seem to be used
         pred_mask[0] = 0  # TODO: remove
+        # NOTE: This does not remove </s> [id: 1]
+
+        # A better way for this (covers, BOS, EOS and PAD)
+        #pred_mask[x <= params.pad_index] = False
+
+        # A more sound way to avoid all special tokens to be masked
+        #pred_mask[x.lt(14)] = False
 
         # generate possible targets / update x input
         _x_real = x[pred_mask]
@@ -882,6 +908,8 @@ class Trainer(object):
         x, y, txt_pred_mask, lengths, positions, langs = to_cuda(x, y, txt_pred_mask, lengths, positions, langs)
         img_x, img_y, img_pred_mask, image_langs = to_cuda(img_x, img_y, img_pred_mask, image_langs)
 
+        #breakpoint()
+
         # forward / loss
         tensor = model(
             'fwd', x=x, lengths=lengths, positions=positions, langs=langs, image_langs=image_langs,
@@ -895,17 +923,35 @@ class Trainer(object):
             sent_tensor = tensor[:langs.size(0)]
             img_tensor = tensor[langs.size(0):]
 
-        _, text_loss = model('predict', tensor=sent_tensor, pred_mask=txt_pred_mask, y=y, get_scores=False)
-        _, img_loss = model('predict_img_class', tensor=img_tensor, pred_mask=img_pred_mask, y=img_y, get_scores=False)
+        text_scores, text_loss = model(
+            'predict', tensor=sent_tensor, pred_mask=txt_pred_mask,
+            y=y, get_scores=True)
+        img_scores, img_loss = model(
+            'predict_img_class', tensor=img_tensor, pred_mask=img_pred_mask,
+            y=img_y, get_scores=True)
 
+        # combined loss
         loss = text_loss + img_loss
-        self.stats[('VLM-%s' % lang1) if lang2 is None else ('VLM-%s-%s' % (lang1, lang2))].append(loss.item())
+
+        text_acc = text_scores.detach().max(1)[1].eq(y).float().mean().item()
+        img_acc = img_scores.detach().max(1)[1].eq(img_y).float().mean().item()
+
+        task = f'VLM-{lang1}' if lang2 is None else f'VLM-{lang1}-{lang2}'
+        self.stats[(task)].append(loss.item())
+        self.stats[(f'{task}-tloss')].append(text_loss.item())
+        self.stats[(f'{task}-vloss')].append(img_loss.item())
+        self.stats[(f'{task}-tacc')].append(text_acc)
+        self.stats[(f'{task}-vacc')].append(img_acc)
+
+        # scale it
         loss = lambda_coeff * loss
 
         if iter % 100 == 0:
             self.writer.add_scalar('img_loss', img_loss.item(), iter)
             self.writer.add_scalar('text_loss', text_loss.item(), iter)
             self.writer.add_scalar('total_loss', loss.item(), iter)
+            self.writer.add_scalar('img_acc', img_acc, iter)
+            self.writer.add_scalar('text_acc', text_acc, iter)
 
         # optimize
         self.optimize(loss)
