@@ -505,7 +505,6 @@ class Trainer(object):
         """
         Decide of random words to mask out, and what target they get assigned.
         """
-        params = self.params
         slen, bs = x.size()
 
         if self.params.sample_alpha == 0:
@@ -557,9 +556,9 @@ class Trainer(object):
 
         return x, _x_real, pred_mask
 
-
     def mask_out_image(self, img_dict):
-        params = self.params
+        """Mask random image features out of a sequence, similar to text
+        counter-part."""
 
         x = torch.from_numpy(
             get_image_properties(img_dict, "detection_classes").astype('int64'))
@@ -567,20 +566,12 @@ class Trainer(object):
         slen, bs = x.size()
 
         # FIXME: mask_Scores is text specific
-        x_prob = params.mask_scores[x.flatten()]
+        x_prob = self.params.mask_scores[x.flatten()]
         n_tgt = math.ceil(params.word_pred * slen * bs)
         tgt_ids = np.random.choice(len(x_prob), n_tgt, replace=False, p=x_prob / x_prob.sum())
         pred_mask = torch.zeros(slen * bs, dtype=torch.bool)
         pred_mask[tgt_ids] = 1
         pred_mask = pred_mask.view(slen, bs)
-
-        # do not predict padding
-        # pad index might be class number in our case
-        # pred_mask[x == params.pad_index] = 0
-        # pred_mask[x == params.bor_index] = 0
-        # pred_mask[x == params.eor_index] = 0
-
-        # pred_mask[0] = 0  # TODO: remove
 
         # generate possible targets / update x input
         _x_real = x[pred_mask]
@@ -590,9 +581,6 @@ class Trainer(object):
         _x = _x_mask * (probs == 0).long() + _x_real * (probs == 1).long() + _x_rand * (probs == 2).long()
         x = x.masked_scatter(pred_mask, _x)
 
-        assert 0 <= x.min() <= x.max() < params.n_words
-        assert x.size() == (slen, bs)
-        assert pred_mask.size() == (slen, bs)
         return x, _x_real, pred_mask
 
     def generate_batch(self, lang1, lang2, name):
@@ -883,9 +871,8 @@ class Trainer(object):
         loss = lambda_coeff * loss
 
         if iter % 100 == 0:
-            self.writer.add_scalar('loss',
-                                   loss.data.tolist(),
-                                   iter)
+            self.writer.add_scalar('loss', loss.item(), iter)
+
         # optimize
         self.optimize(loss)
 
@@ -920,8 +907,6 @@ class Trainer(object):
         # cuda
         x, y, txt_pred_mask, lengths, positions, langs = to_cuda(x, y, txt_pred_mask, lengths, positions, langs)
         img_x, img_y, img_pred_mask, image_langs = to_cuda(img_x, img_y, img_pred_mask, image_langs)
-
-        #breakpoint()
 
         # forward / loss
         tensor = model(
