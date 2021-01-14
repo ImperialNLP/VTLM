@@ -589,8 +589,7 @@ class Trainer(object):
         # shuffle all regions in the batch and pick random ones
         shuf_region_order = torch.randperm(bs * n_regions)
         feat_inventory = img_feats.view(-1, img_feats.size(-1))[shuf_region_order]
-        img_feats = img_feats.masked_scatter_(
-            probs.eq(3).unsqueeze(-1), feat_inventory)
+        img_feats.masked_scatter_(probs.eq(3).unsqueeze(-1), feat_inventory)
 
         # mask the features with 0
         # NOTE: We can't mask it with <MASK> at this step because of
