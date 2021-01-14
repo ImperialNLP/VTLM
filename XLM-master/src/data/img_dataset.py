@@ -12,7 +12,7 @@ logger = getLogger()
 
 
 def load_images(sentence_ids, feat_path, img_names, n_regions):
-    img_data = []
+    img_scores, img_boxes, img_feats, img_labels = [], [], [], []
 
     for idx in sentence_ids:
         # Everything should be loadable. If features do not exist
@@ -21,14 +21,26 @@ def load_images(sentence_ids, feat_path, img_names, n_regions):
         with open(f_name, "rb") as f:
             x = pickle.load(f)
             assert len(x) != 0 and len(x["detection_scores"]) == 36
-            # reduce to requested # of regions
-            img_data.append({k: x[k][:n_regions] for k in x})
 
-    return img_data
+            # reduce to requested # of regions
+            img_scores.append(x['detection_scores'][:n_regions])
+            img_boxes.append(x['detection_boxes'][:n_regions])
+            img_feats.append(x['detection_features'][:n_regions])
+            img_labels.append(x['detection_classes'][:n_regions])
+
+    # convert to numpy arrays
+    # detection_scores is not used anywhere so we don't return it
+    img_boxes = torch.from_numpy(
+        np.array(img_boxes, dtype=img_boxes[0].dtype)).cuda()
+    img_feats = torch.from_numpy(
+        np.array(img_feats, dtype=img_feats[0].dtype)).cuda()
+    img_labels = torch.from_numpy(
+        np.array(img_labels, dtype='int64')).cuda()
+
+    return img_boxes, img_feats, img_labels
 
 
 class DatasetWithRegions(Dataset):
-
     def __init__(self, sent, pos, image_names, params):
         self.eos_index = params.eos_index
         self.pad_index = params.pad_index
@@ -62,18 +74,12 @@ class DatasetWithRegions(Dataset):
         super().select_data(a, b)
         self.image_names = self.image_names[a:b]
 
-    def batch_images(self, images, feat_type):
-        feats = torch.from_numpy(
-            np.array([img[feat_type][:self.num_of_regions] for img in images]))
-        lengths = torch.full((len(images),), self.num_of_regions, dtype=torch.long)
-        return feats, lengths
-
     def load_images(self, sentence_ids):
         return load_images(
             sentence_ids, self.region_features_path, self.image_names,
             self.num_of_regions)
 
-    def get_batches_iterator(self, batches, return_indices):
+    def get_batches_iterator(self, batches):
         for sentence_ids in batches:
             if 0 < self.max_batch_size < len(sentence_ids):
                 self._rng.shuffle(sentence_ids)
@@ -83,12 +89,9 @@ class DatasetWithRegions(Dataset):
             sent = self.batch_sentences([self.sent[a:b] for a, b in pos])
 
             # Visual features dictionary
-            img_data = self.load_images(sentence_ids)
+            img_boxes, img_feats, img_labels = self.load_images(sentence_ids)
 
-            if return_indices:
-                yield (sent, img_data, sentence_ids)
-            else:
-                yield (sent, img_data)
+            yield (sent, img_boxes, img_feats, img_labels, sentence_ids)
 
 
 class ParallelDatasetWithRegions(ParallelDataset):
@@ -122,18 +125,12 @@ class ParallelDatasetWithRegions(ParallelDataset):
         super().select_data(a, b)
         self.image_names = self.image_names[a:b]
 
-    def batch_images(self, images, feat_type):
-        feats = torch.from_numpy(
-            np.array([img[feat_type][:self.num_of_regions] for img in images]))
-        lengths = torch.full((len(images),), self.num_of_regions, dtype=torch.long)
-        return feats, lengths
-
     def load_images(self, sentence_ids):
         return load_images(
             sentence_ids, self.region_features_path, self.image_names,
             self.num_of_regions)
 
-    def get_batches_iterator(self, batches, return_indices):
+    def get_batches_iterator(self, batches):
         for sentence_ids in batches:
             if 0 < self.max_batch_size < len(sentence_ids):
                 self._rng.shuffle(sentence_ids)
@@ -145,10 +142,7 @@ class ParallelDatasetWithRegions(ParallelDataset):
             sent1 = self.batch_sentences([self.sent1[a:b] for a, b in pos1])
             sent2 = self.batch_sentences([self.sent2[a:b] for a, b in pos2])
 
-            # Visual features dictionary
-            img_data = self.load_images(sentence_ids)
+            # Visual features as separate tensors
+            img_boxes, img_feats, img_labels = self.load_images(sentence_ids)
 
-            if return_indices:
-                yield (sent1, sent2, img_data, sentence_ids)
-            else:
-                yield (sent1, sent2, img_data)
+            yield (sent1, sent2, img_boxes, img_feats, img_labels, sentence_ids)
