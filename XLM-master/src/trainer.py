@@ -947,6 +947,9 @@ class Trainer(object):
             sent_tensor = tensor[:langs.size(0)]
             img_tensor = tensor[langs.size(0):]
 
+        # bring batch dimension to 0-dim
+        img_tensor = img_tensor.permute(1, 0, 2)
+
         text_scores, text_loss = model(
             'predict', tensor=sent_tensor, pred_mask=txt_pred_mask,
             y=y, get_scores=True)
