@@ -91,16 +91,16 @@ class ImgPredLayer(nn.Module):
     def __init__(self, params):
         super().__init__()
         self.asm = params.asm
-        self.n_classes = params.num_of_classes
+        self.n_classes = params.num_obj_labels
         self.pad_index = params.pad_index
         dim = params.emb_dim
 
         if params.asm is False:
-            self.proj = nn.Linear(dim, params.num_of_classes, bias=True)
+            self.proj = nn.Linear(dim, params.num_obj_labels, bias=True)
         else:
             self.proj = nn.AdaptiveLogSoftmaxWithLoss(
                 in_features=dim,
-                n_classes=params.num_of_classes,
+                n_classes=params.num_obj_labels,
                 cutoffs=params.asm_cutoffs,
                 div_value=params.asm_div_value,
                 head_bias=True,  # default is False

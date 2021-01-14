@@ -41,7 +41,7 @@ def get_parser():
                         help="Path of the image feature names.")
     parser.add_argument("--num_of_regions", type=int, default=36,
                         help="# of region features to use for multi-modal training.")
-    parser.add_argument("--num_of_classes", type=int, default=601,
+    parser.add_argument("--num_obj_labels", type=int, default=601,
                         help="# of object label classes.")
     parser.add_argument("--exp_name", type=str, default="",
                         help="Experiment name")
