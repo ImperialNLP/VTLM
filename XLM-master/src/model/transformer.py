@@ -459,7 +459,7 @@ class TransformerModel(nn.Module):
             # project features
             img_feats = self.projector(img_feats)
 
-            if self.reg_mask_type == 'mask':
+            if img_mask_pos is not None and self.reg_mask_type == 'mask':
                 # replace zero-ed out regions with <MASK> embedding
                 mask_emb = self.embeddings.weight[self.mask_index]
                 # masked_scatter fills from source tensor in an ordered way

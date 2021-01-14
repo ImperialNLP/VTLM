@@ -23,10 +23,10 @@ def load_images(sentence_ids, feat_path, img_names, n_regions):
             assert len(x) != 0 and len(x["detection_scores"]) == 36
 
             # reduce to requested # of regions
-            img_scores.append(x['detection_scores'][:n_regions])
-            img_boxes.append(x['detection_boxes'][:n_regions])
-            img_feats.append(x['detection_features'][:n_regions])
-            img_labels.append(x['detection_classes'][:n_regions])
+            img_scores.append(x['detection_scores'][:n_regions].squeeze())
+            img_boxes.append(x['detection_boxes'][:n_regions].squeeze())
+            img_feats.append(x['detection_features'][:n_regions].squeeze())
+            img_labels.append(x['detection_classes'][:n_regions].squeeze())
 
     # convert to numpy arrays
     # detection_scores is not used anywhere so we don't return it

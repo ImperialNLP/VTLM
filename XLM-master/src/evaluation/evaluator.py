@@ -468,20 +468,20 @@ class Evaluator(object):
         n_valid = 0
 
         for batch in self.get_iterator_vlm(data_set, lang1, lang2, stream=(lang2 is None)):
-            if lang2 is None:
-                # vMLM
-                (x, len1), (img_boxes, img_feats, img_labels) = batch
-                langs = x.clone().fill_(lang1_id)
-                image_langs = torch.empty((params.num_of_regions, len1.size(0))).long().fill_(img_id)
-                lengths = len1
-                positions = None
-            else:
+            if lang2 is not None:
                 # vTLM
-                (img_boxes, img_feats, img_labels), (x1, len1), (x2, len2) = batch
+                _, (img_boxes, img_feats, img_labels), (x1, len1), (x2, len2) = batch
                 image_langs = torch.empty((params.num_of_regions, len1.size(0))).long().fill_(img_id)
                 x, lengths, positions, langs = concat_batches(
                     x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index,
                     params.eos_index, reset_positions=True)
+            else:
+                # vMLM
+                (x, len1), (img_boxes, img_feats, img_labels), _ = batch
+                langs = x.clone().fill_(lang1_id)
+                image_langs = torch.empty((params.num_of_regions, len1.size(0))).long().fill_(img_id)
+                lengths = len1
+                positions = None
 
             if params.word_pred > 0:
                 # words to predict
@@ -509,11 +509,13 @@ class Evaluator(object):
             x, y, pred_mask, lengths, positions, langs, image_langs = to_cuda(
                 x, y, pred_mask, lengths, positions, langs, image_langs)
 
+            img_boxes, img_feats = to_cuda(img_boxes, img_feats)
+
             # forward / loss
             tensor = model(
                 'fwd', x=x, lengths=lengths, positions=positions, langs=langs,
                 image_langs=image_langs, causal=False,
-                img_boxes=img_boxes, img_feats=img_feats, img_labels=img_labels)
+                img_boxes=img_boxes, img_feats=img_feats)
 
             # Fetch linguistic part of the hidden states for accuracy computation
             if params.visual_first:
@@ -521,7 +523,8 @@ class Evaluator(object):
             else:
                 sent_tensor = tensor[:-params.num_of_regions]
 
-            word_scores, loss = model('predict', tensor=sent_tensor, pred_mask=pred_mask, y=y, get_scores=True)
+            word_scores, loss = model('predict', tensor=sent_tensor,
+                pred_mask=pred_mask, y=y, get_scores=True)
 
             # update stats
             n_words += len(y)
