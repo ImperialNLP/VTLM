@@ -470,14 +470,14 @@ class Evaluator(object):
         for batch in self.get_iterator_vlm(data_set, lang1, lang2, stream=(lang2 is None)):
             if lang2 is None:
                 # vMLM
-                (x, len1), (img_dict) = batch
+                (x, len1), (img_boxes, img_feats, img_labels) = batch
                 langs = x.clone().fill_(lang1_id)
                 image_langs = torch.empty((params.num_of_regions, len1.size(0))).long().fill_(img_id)
                 lengths = len1
                 positions = None
             else:
                 # vTLM
-                (img_dict), (x1, len1), (x2, len2) = batch
+                (img_boxes, img_feats, img_labels), (x1, len1), (x2, len2) = batch
                 image_langs = torch.empty((params.num_of_regions, len1.size(0))).long().fill_(img_id)
                 x, lengths, positions, langs = concat_batches(
                     x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index,
@@ -512,7 +512,8 @@ class Evaluator(object):
             # forward / loss
             tensor = model(
                 'fwd', x=x, lengths=lengths, positions=positions, langs=langs,
-                image_langs=image_langs, causal=False, img_dict=img_dict)
+                image_langs=image_langs, causal=False,
+                img_boxes=img_boxes, img_feats=img_feats, img_labels=img_labels)
 
             # Fetch linguistic part of the hidden states for accuracy computation
             if params.visual_first:
@@ -586,7 +587,7 @@ class EncDecEvaluator(Evaluator):
 
         for batch in self.get_iterator(data_set, lang1, lang2):
             # generate batch
-            _, _, img_dict, (x1, len1), (x2, len2) = batch
+            _, _, (img_boxes, img_feats, img_labels), (x1, len1), (x2, len2) = batch
             langs1 = x1.clone().fill_(lang1_id)
             langs2 = x2.clone().fill_(lang2_id)
             img_langs = torch.empty((params.num_of_regions, langs1.size(1))).long().fill_(img_id)
@@ -602,8 +603,9 @@ class EncDecEvaluator(Evaluator):
                 x1, len1, langs1, x2, len2, langs2, y, img_langs)
             # encode source sentence
             enc1 = encoder(
-                'fwd', x=x1, lengths=len1, langs=langs1, image_langs=img_langs,
-                img_dict=img_dict, causal=False)
+                'fwd', x=x1, lengths=len1, langs=langs1,
+                image_langs=img_langs, causal=False,
+                img_boxes=img_boxes, img_feats=img_feats, img_labels=img_labels)
 
             # encode source sentence
             enc1 = enc1.transpose(0, 1)
