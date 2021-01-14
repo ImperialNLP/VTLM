@@ -508,47 +508,54 @@ class Trainer(object):
         params = self.params
         slen, bs = x.size()
 
-        if params.sample_alpha == 0:
-            pred_mask = np.random.rand(slen, bs) <= params.word_pred
+        if self.params.sample_alpha == 0:
+            pred_mask = np.random.rand(slen, bs) <= self.params.word_pred
             pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
         else:
             # mask_scores correctly avoids masking/predicting special tokens
-            x_prob = params.mask_scores[x.flatten()]
-            n_tgt = math.ceil(params.word_pred * slen * bs)
+            x_prob = self.params.mask_scores[x.flatten()]
+            n_tgt = math.ceil(self.params.word_pred * slen * bs)
             tgt_ids = np.random.choice(len(x_prob), n_tgt, replace=False, p=x_prob / x_prob.sum())
             pred_mask = torch.zeros(slen * bs, dtype=torch.bool)
             pred_mask[tgt_ids] = 1
             pred_mask = pred_mask.view(slen, bs)
 
         # do not predict padding
-        pred_mask[x == params.pad_index] = 0
+        pred_mask[x == self.params.pad_index] = 0
 
         # this only avoids masking predicting first </s>'s (EOSs) in each sequence
         pred_mask[0] = 0
 
         # A better and combined way for this (covers, BOS, EOS and PAD)
         # this will also avoid masking predicting other </s> in the sequences
-        #pred_mask[x <= params.pad_index] = False
+        #pred_mask[x <= self.params.pad_index] = False
 
         # generate possible targets / update x input
         # an overlay with input itself
         _x_real = x[pred_mask]
 
         # an overlay with randomized inputs
-        _x_rand = _x_real.clone().random_(params.n_words)
+        _x_rand = _x_real.clone().random_(self.params.n_words)
 
         # an overlay with masked inputs
-        _x_mask = _x_real.clone().fill_(params.mask_index)
-        probs = torch.multinomial(params.pred_probs, len(_x_real), replacement=True)
-        _x = _x_mask * (probs == 0).long() + _x_real * (probs == 1).long() + _x_rand * (probs == 2).long()
+        _x_mask = _x_real.clone().fill_(self.params.mask_index)
+
+        # sample probabilities for three types of masking: mask, keep, rand
+        probs = torch.multinomial(
+            self.params.pred_probs, len(_x_real), replacement=True)
+
+        # blend the overlays accordingly to form the final masked input
+        _x = _x_mask.mul(probs.eq(0).long()) + \
+            _x_real.mul(probs.eq(1).long()) + \
+            _x_rand.mul(probs.eq(2).long())
+
         x = x.masked_scatter(pred_mask, _x)
 
-        assert 0 <= x.min() <= x.max() < params.n_words
+        assert 0 <= x.min() <= x.max() < self.params.n_words
         assert x.size() == (slen, bs)
         assert pred_mask.size() == (slen, bs)
 
         return x, _x_real, pred_mask
-
 
 
     def mask_out_image(self, img_dict):
