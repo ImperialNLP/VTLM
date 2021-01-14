@@ -89,6 +89,10 @@ class Dictionary(object):
             assert count <= last_count
             last_count = count
 
+    def to_str(self, idxs):
+        """Convert indices to string format."""
+        return ' '.join([self.id2word[i] for i in idxs])
+
     def index(self, word, no_unk=False):
         """
         Returns the index of the specified word.
