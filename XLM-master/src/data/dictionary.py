@@ -27,6 +27,7 @@ MASK_WORD = SPECIAL_WORD % 1
 BOR_WORD = SPECIAL_WORD % 2
 EOR_WORD = SPECIAL_WORD % 3
 
+
 class Dictionary(object):
 
     def __init__(self, id2word, word2id, counts):
@@ -38,8 +39,6 @@ class Dictionary(object):
         self.eos_index = word2id[EOS_WORD]
         self.pad_index = word2id[PAD_WORD]
         self.unk_index = word2id[UNK_WORD]
-        #self.bor_index = word2id[BOR_WORD]
-        #self.bos_index = word2id[BOS_WORD]
         self.check_valid()
 
     def __len__(self):

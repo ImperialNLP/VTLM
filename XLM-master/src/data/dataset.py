@@ -182,12 +182,10 @@ class Dataset(object):
         # sanity checks
         self.check()
 
-    def get_batches_iterator(self, batches, return_indices):
+    def get_batches_iterator(self, batches):
         """
         Return a sentences iterator, given the associated sentence batches.
         """
-        assert type(return_indices) is bool
-
         for sentence_ids in batches:
             if 0 < self.max_batch_size < len(sentence_ids):
                 self._rng.shuffle(sentence_ids)
@@ -195,9 +193,9 @@ class Dataset(object):
             pos = self.pos[sentence_ids]
             sent = [self.sent[a:b] for a, b in pos]
             sent = self.batch_sentences(sent)
-            yield (sent, sentence_ids) if return_indices else sent
+            yield (sent, sentence_ids)
 
-    def get_iterator(self, shuffle, group_by_size=False, n_sentences=-1, return_indices=False):
+    def get_iterator(self, shuffle, group_by_size=False, n_sentences=-1):
         """
         Return a sentences iterator.
         """
@@ -239,7 +237,7 @@ class Dataset(object):
         assert lengths[indices].sum() == sum([lengths[x].sum() for x in batches])
 
         # return the iterator
-        return self.get_batches_iterator(batches, return_indices)
+        return self.get_batches_iterator(batches)
 
 
 class ParallelDataset(Dataset):
@@ -348,12 +346,10 @@ class ParallelDataset(Dataset):
         # sanity checks
         self.check()
 
-    def get_batches_iterator(self, batches, return_indices):
+    def get_batches_iterator(self, batches):
         """
         Return a sentences iterator, given the associated sentence batches.
         """
-        assert type(return_indices) is bool
-
         for sentence_ids in batches:
             if 0 < self.max_batch_size < len(sentence_ids):
                 self._rng.shuffle(sentence_ids)
@@ -362,9 +358,9 @@ class ParallelDataset(Dataset):
             pos2 = self.pos2[sentence_ids]
             sent1 = self.batch_sentences([self.sent1[a:b] for a, b in pos1])
             sent2 = self.batch_sentences([self.sent2[a:b] for a, b in pos2])
-            yield (sent1, sent2, sentence_ids) if return_indices else (sent1, sent2)
+            yield (sent1, sent2, sentence_ids)
 
-    def get_iterator(self, shuffle, group_by_size=False, n_sentences=-1, return_indices=False):
+    def get_iterator(self, shuffle, group_by_size=False, n_sentences=-1):
         """
         Return a sentences iterator.
         """
@@ -404,4 +400,4 @@ class ParallelDataset(Dataset):
         assert lengths[indices].sum() == sum([lengths[x].sum() for x in batches])
 
         # return the iterator
-        return self.get_batches_iterator(batches, return_indices)
+        return self.get_batches_iterator(batches)

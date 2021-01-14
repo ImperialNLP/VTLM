@@ -10,14 +10,12 @@ from torch import nn
 from torch.nn import functional as F
 from torch.nn.utils import clip_grad_norm_
 import apex
-import random
 from .optim import get_optimizer
-from .utils import to_cuda, concat_batches, find_modules, get_image_properties
+from .utils import to_cuda, concat_batches, find_modules
 from .utils import parse_lambda_config, update_lambdas
 from .model.transformer import TransformerFFN
 from torch.utils.tensorboard import SummaryWriter
 
-# default `log_dir` is "runs" - we'll be more specific here
 
 logger = getLogger()
 
@@ -87,7 +85,12 @@ class Trainer(object):
             self.best_stopping_criterion = None
 
         # probability of masking out / randomize / not modify words to predict
-        params.pred_probs = torch.FloatTensor([params.word_mask, params.word_keep, params.word_rand])
+        params.word_pred_probs = torch.FloatTensor(
+            [params.word_mask, params.word_keep, params.word_rand])
+
+        # same for regions
+        params.region_pred_probs = torch.FloatTensor(
+            [params.region_mask, params.region_keep, params.region_rand])
 
         # probabilty to predict a word
         counts = np.array(list(self.data['dico'].counts.values()))
@@ -527,7 +530,7 @@ class Trainer(object):
 
         # A better and combined way for this (covers, BOS, EOS and PAD)
         # this will also avoid masking predicting other </s> in the sequences
-        #pred_mask[x <= self.params.pad_index] = False
+        # pred_mask[x <= self.params.pad_index] = False
 
         # generate possible targets / update x input
         # an overlay with input itself
@@ -541,7 +544,7 @@ class Trainer(object):
 
         # sample probabilities for three types of masking: mask, keep, rand
         probs = torch.multinomial(
-            self.params.pred_probs, len(_x_real), replacement=True)
+            self.params.word_pred_probs, len(_x_real), replacement=True)
 
         # blend the overlays accordingly to form the final masked input
         _x = _x_mask.mul(probs.eq(0).long()) + \
@@ -556,32 +559,38 @@ class Trainer(object):
 
         return x, _x_real, pred_mask
 
-    def mask_out_image(self, img_dict):
+    def mask_out_image(self, img_boxes, img_feats, img_labels):
         """Mask random image features out of a sequence, similar to text
         counter-part."""
 
-        x = torch.from_numpy(
-            get_image_properties(img_dict, "detection_classes").astype('int64'))
-        x = x.t()
-        slen, bs = x.size()
+        x = img_labels.t()
+        n_regions, bs = x.size()
 
-        # FIXME: mask_Scores is text specific
-        x_prob = self.params.mask_scores[x.flatten()]
-        n_tgt = math.ceil(params.word_pred * slen * bs)
-        tgt_ids = np.random.choice(len(x_prob), n_tgt, replace=False, p=x_prob / x_prob.sum())
-        pred_mask = torch.zeros(slen * bs, dtype=torch.bool)
-        pred_mask[tgt_ids] = 1
-        pred_mask = pred_mask.view(slen, bs)
+        # Generate prediction mask
+        pred_mask = np.random.rand(n_regions, bs) <= self.params.region_pred
+        pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
 
-        # generate possible targets / update x input
+        # an overlay with real prediction labels
         _x_real = x[pred_mask]
-        _x_rand = _x_real.clone().random_(params.num_obj_labels)
-        _x_mask = _x_real.clone().fill_(params.mask_index)
-        probs = torch.multinomial(params.pred_probs, len(_x_real), replacement=True)
-        _x = _x_mask * (probs == 0).long() + _x_real * (probs == 1).long() + _x_rand * (probs == 2).long()
-        x = x.masked_scatter(pred_mask, _x)
 
-        return x, _x_real, pred_mask
+        # an overlay with randomized labels
+        # NOTE: hard to implement at input side!
+        _x_rand = _x_real.clone().random_(self.params.num_obj_labels)
+
+        # an overlay with masked inputs
+        _x_mask = _x_real.clone().fill_(self.params.mask_index)
+
+        probs = torch.multinomial(
+            self.params.region_pred_probs, len(_x_real), replacement=True)
+
+        # blend the overlays accordingly to form the final masked input
+        _x = _x_mask.mul(probs.eq(0).long()) + \
+            _x_real.mul(probs.eq(1).long()) + \
+            _x_rand.mul(probs.eq(2).long())
+
+        img_labels = x.masked_scatter(pred_mask, _x)
+
+        return img_boxes, img_feats, img_labels, _x_real, pred_mask
 
     def generate_batch(self, lang1, lang2, name):
         """
@@ -621,7 +630,7 @@ class Trainer(object):
 
         if lang2 is not None:
             # vTLM
-            (img_dict), (x1, len1), (x2, len2) = self.get_batch_vpara(name, lang1, lang2)
+            _, (boxes, feats, labels), (x1, len1), (x2, len2) = self.get_batch_vpara(name, lang1, lang2)
             x, lengths, positions, langs = concat_batches(
                 x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index,
                 params.eos_index, reset_positions=True)
@@ -629,14 +638,14 @@ class Trainer(object):
                 (params.num_of_regions, len1.size(0))).long().fill_(img_id)
         else:
             # vMLM
-            (x, len1), (img_dict) = self.get_batch_vpara(name, lang1, lang2)
+            (x, len1), (boxes, feats, labels), _ = self.get_batch_vpara(name, lang1, lang2)
             langs = x.clone().fill_(lang1_id)
             image_langs = torch.empty(
                 (params.num_of_regions, len1.size(0))).long().fill_(img_id)
             lengths = len1
             positions = None
 
-        return x, lengths, positions, langs, image_langs, img_dict, (None, None)
+        return x, lengths, positions, langs, image_langs, boxes, feats, labels, (None, None)
 
     def save_checkpoint(self, name, include_optimizers=True):
         """
@@ -896,22 +905,30 @@ class Trainer(object):
         model.train()
 
         # generate batch / select words to predict
-        x, lengths, positions, langs, image_langs, img_dict, _ = self.generate_batch_vpara(
-            lang1, lang2, 'pred_object')
-        x, lengths, positions, langs, _ = self.round_batch(x, lengths, positions, langs)
+        x, lengths, positions, langs, \
+            image_langs, img_boxes, img_feats, img_labels, _ = \
+            self.generate_batch_vpara(lang1, lang2, 'pred_object')
+
+        x, lengths, positions, langs, _ = self.round_batch(
+            x, lengths, positions, langs)
 
         # Get prediction masks
         x, y, txt_pred_mask = self.mask_out(x, lengths)
-        img_x, img_y, img_pred_mask = self.mask_out_image(img_dict)
+        img_boxes, img_feats, img_labels, img_y, img_pred_mask = self.mask_out_image(
+            img_boxes, img_feats, img_labels)
 
         # cuda
-        x, y, txt_pred_mask, lengths, positions, langs = to_cuda(x, y, txt_pred_mask, lengths, positions, langs)
-        img_x, img_y, img_pred_mask, image_langs = to_cuda(img_x, img_y, img_pred_mask, image_langs)
+        x, y, txt_pred_mask, lengths, positions, langs, image_langs = to_cuda(
+            x, y, txt_pred_mask, lengths, positions, langs, image_langs)
+
+        img_boxes, img_feats, img_labels, img_y, img_pred_mask = to_cuda(
+            img_boxes, img_feats, img_labels, img_y, img_pred_mask)
 
         # forward / loss
         tensor = model(
-            'fwd', x=x, lengths=lengths, positions=positions, langs=langs, image_langs=image_langs,
-            causal=False, img_dict=img_dict)
+            'fwd', x=x, lengths=lengths, positions=positions, causal=False,
+            langs=langs, image_langs=image_langs,
+            img_boxes=img_boxes, img_feats=img_feats, img_labels=img_labels)
 
         # slice the outputs back to feed into prediction head(s)
         if params.visual_first:
@@ -1107,7 +1124,7 @@ class EncDecTrainer(Trainer):
         img_id = params.lang2id["img"]
 
         # generate batch
-        _, _, img_dict, (x1, len1), (x2, len2) = self.get_batch('mmt', lang1, lang2)
+        _, _, img_boxes, img_feats, img_labels, (x1, len1), (x2, len2) = self.get_batch('mmt', lang1, lang2)
 
         langs1 = x1.clone().fill_(lang1_id)
         langs2 = x2.clone().fill_(lang2_id)
@@ -1125,8 +1142,9 @@ class EncDecTrainer(Trainer):
 
         # encode source sentence
         enc1 = self.encoder(
-            'fwd', x=x1, lengths=len1, langs=langs1, image_langs=img_langs,
-            img_dict=img_dict, causal=False).transpose(0, 1)
+            'fwd', x=x1, lengths=len1, langs=langs1, causal=False,
+            image_langs=img_langs, img_boxes=img_boxes, img_feats=img_feats,
+            img_labels=img_labels).transpose(0, 1)
 
         # decode target sentence
         dec2 = self.decoder(

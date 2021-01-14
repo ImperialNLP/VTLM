@@ -32,13 +32,6 @@ class AttrDict(dict):
         self.__dict__ = self
 
 
-def get_image_properties(img_dict, property_name):
-    feat_list = []
-    for img in img_dict:
-        feat_list.append(img[property_name].squeeze())
-    return np.array(feat_list, dtype=feat_list[0].dtype)
-
-
 def bool_flag(s):
     """
     Parse boolean arguments from the command line.
@@ -258,7 +251,6 @@ def truncate(x, lengths, max_len, eos_index):
                 lengths[i] = max_len
                 x[max_len - 1, i] = eos_index
     return x, lengths
-
 
 
 def shuf_order(langs, params=None, n=5):

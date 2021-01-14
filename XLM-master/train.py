@@ -124,6 +124,14 @@ def get_parser():
     parser.add_argument("--word_mask_keep_rand", type=str, default="0.8,0.1,0.1",
                         help="Fraction of words to mask out / keep / randomize, among the words to predict")
 
+    # masked region classification parameters
+    parser.add_argument("--region_pred", type=float, default=0.15,
+                        help="Fraction of regions for which we need to make a prediction")
+    parser.add_argument("--region_mask_keep_rand", type=str, default="0.8,0.1,0.1",
+                        help="Fraction of regions to mask out / keep / randomize, among the regions to predict")
+    parser.add_argument("--region_mask_type", type=str, default="mask", choices=["mask", "zero"],
+                        help="Whether to re-use [MASK] embedding or a zero-vector for masked out regions")
+
     # input sentence noise
     parser.add_argument("--word_shuffle", type=float, default=0,
                         help="Randomly shuffle input words (0 to disable)")

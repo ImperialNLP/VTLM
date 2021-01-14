@@ -106,12 +106,12 @@ class SentenceEmbedder(object):
                 logger.info("Adding language embedding parameters to optimizer")
             parameters += self.model.layer_norm_emb.parameters()
         # layers
-        for l in range(max(i - 1, 0), j):
-            parameters += self.model.attentions[l].parameters()
-            parameters += self.model.layer_norm1[l].parameters()
-            parameters += self.model.ffns[l].parameters()
-            parameters += self.model.layer_norm2[l].parameters()
-            logger.info("Adding layer-%s parameters to optimizer" % (l + 1))
+        for ll in range(max(i - 1, 0), j):
+            parameters += self.model.attentions[ll].parameters()
+            parameters += self.model.layer_norm1[ll].parameters()
+            parameters += self.model.ffns[ll].parameters()
+            parameters += self.model.layer_norm2[ll].parameters()
+            logger.info("Adding layer-%s parameters to optimizer" % (ll + 1))
 
         logger.info("Optimizing on %i Transformer elements." % sum([p.nelement() for p in parameters]))
 

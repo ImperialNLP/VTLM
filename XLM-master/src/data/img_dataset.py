@@ -31,11 +31,11 @@ def load_images(sentence_ids, feat_path, img_names, n_regions):
     # convert to numpy arrays
     # detection_scores is not used anywhere so we don't return it
     img_boxes = torch.from_numpy(
-        np.array(img_boxes, dtype=img_boxes[0].dtype)).cuda()
+        np.array(img_boxes, dtype=img_boxes[0].dtype))
     img_feats = torch.from_numpy(
-        np.array(img_feats, dtype=img_feats[0].dtype)).cuda()
+        np.array(img_feats, dtype=img_feats[0].dtype))
     img_labels = torch.from_numpy(
-        np.array(img_labels, dtype='int64')).cuda()
+        np.array(img_labels, dtype='int64'))
 
     return img_boxes, img_feats, img_labels
 
@@ -91,7 +91,7 @@ class DatasetWithRegions(Dataset):
             # Visual features dictionary
             img_boxes, img_feats, img_labels = self.load_images(sentence_ids)
 
-            yield (sent, img_boxes, img_feats, img_labels, sentence_ids)
+            yield (sent, (img_boxes, img_feats, img_labels), sentence_ids)
 
 
 class ParallelDatasetWithRegions(ParallelDataset):
@@ -145,4 +145,4 @@ class ParallelDatasetWithRegions(ParallelDataset):
             # Visual features as separate tensors
             img_boxes, img_feats, img_labels = self.load_images(sentence_ids)
 
-            yield (sent1, sent2, img_boxes, img_feats, img_labels, sentence_ids)
+            yield (sent1, sent2, (img_boxes, img_feats, img_labels), sentence_ids)

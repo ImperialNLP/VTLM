@@ -23,7 +23,9 @@ def check_model_params(params):
     # masked language modeling task parameters
     assert params.bptt >= 1
     assert 0 <= params.word_pred < 1
+    assert 0 <= params.region_pred < 1
     assert 0 <= params.sample_alpha < 1
+
     s = params.word_mask_keep_rand.split(',')
     assert len(s) == 3
     s = [float(x) for x in s]
@@ -31,6 +33,14 @@ def check_model_params(params):
     params.word_mask = s[0]
     params.word_keep = s[1]
     params.word_rand = s[2]
+
+    s = params.region_mask_keep_rand.split(',')
+    assert len(s) == 3
+    s = [float(x) for x in s]
+    assert all([0 <= x <= 1 for x in s]) and sum(s) == 1
+    params.region_mask = s[0]
+    params.region_keep = s[1]
+    params.region_rand = s[2]
 
     # input sentence noise for DAE
     if len(params.ae_steps) == 0:

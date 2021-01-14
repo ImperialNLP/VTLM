@@ -15,8 +15,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..utils import get_image_properties
-
 
 N_MAX_POSITIONS = 512  # maximum input sequence length
 
@@ -266,8 +264,7 @@ class Projector(nn.Module):
         self.relu = getattr(params, 'visual_relu', True)
         self.linear = nn.Linear(1536, params.emb_dim)
 
-    def forward(self, input):
-        x = torch.from_numpy(input).cuda()
+    def forward(self, x):
         x = self.linear(x.view(x.size(0), x.size(1), -1))
         return F.relu(x) if self.relu else x
 
@@ -277,11 +274,10 @@ class RegionalEncodings(nn.Module):
     def __init__(self, params):
         super().__init__()
         self.relu = getattr(params, 'visual_relu', True)
-        self.linear = nn.Linear(4, params.emb_dim,
-            bias=getattr(params, 'reg_enc_bias', True))
+        self.linear = nn.Linear(
+            4, params.emb_dim, bias=getattr(params, 'reg_enc_bias', True))
 
-    def forward(self, input):
-        x = torch.from_numpy(input).cuda()
+    def forward(self, x):
         x = self.linear(x)
         return F.relu(x) if self.relu else x
 
@@ -388,7 +384,7 @@ class TransformerModel(nn.Module):
     def fwd(self, x, lengths, causal,
             src_enc=None, src_len=None,
             positions=None, langs=None, image_langs=None, cache=None,
-            image_regions=None, box_coordinates=None, img_dict=None):
+            img_boxes=None, img_feats=None, img_labels=None):
         """
         Inputs:
             `x` LongTensor(slen, bs), containing word indices
@@ -454,17 +450,13 @@ class TransformerModel(nn.Module):
         tensor = F.dropout(tensor, p=self.dropout, training=self.training)
         tensor *= mask.unsqueeze(-1).to(tensor.dtype)
 
-        if img_dict is not None and image_langs is not None:
+        if img_feats is not None and image_langs is not None:
             # create masks which are always active by the way
             img_mask = mask.new_ones((mask.size(0), self.num_of_regions))
             img_attn_mask = img_mask.clone()
 
-            # Get feature vectors
-            feats = get_image_properties(img_dict, 'detection_features')
-            bboxs = get_image_properties(img_dict, 'detection_boxes')
-
-            feats = self.projector(feats) + self.regional_encodings(bboxs) + \
-                    self.lang_embeddings(image_langs.t())
+            feats = self.projector(img_feats) + self.regional_encodings(img_boxes) + \
+                self.lang_embeddings(image_langs.t())
 
             # enabled through `--visual_lnorm true`
             feats = self.layer_norm_vis(feats)
