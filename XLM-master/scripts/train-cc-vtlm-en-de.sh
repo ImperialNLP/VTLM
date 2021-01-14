@@ -2,7 +2,7 @@
 
 FEAT_PATH="/data2/ozan/conceptual_captions/avgpool_features"
 DATA_PATH="/data2/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe"
-DUMP_PATH="/data/ozan/experiments/mmvc/mmvc_code"
+DUMP_PATH="/data/ozan/experiments/mmvc/mmvc_code_bugfix"
 
 ipython -i train.py -- --exp_name vtlm_en_de_v3 --dump_path $DUMP_PATH --data_path $DATA_PATH \
   --lgs 'en-de' --clm_steps '' --mlm_steps 'en-de' \

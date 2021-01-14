@@ -483,27 +483,15 @@ class Trainer(object):
         words, lengths = self.word_blank(words, lengths)
         return words, lengths
 
-    def mask_out_image(self, img_dict, masked_labels=None):
+    def mask_out_image(self, img_dict):
         params = self.params
 
-        x = torch.from_numpy(get_image_properties(img_dict, "detection_classes").astype('int64'))
+        x = torch.from_numpy(
+            get_image_properties(img_dict, "detection_classes").astype('int64'))
         x = x.t()
         slen, bs = x.size()
 
-        if masked_labels is not None:
-            pred_mask = np.random.rand(slen, bs) <= params.word_pred
-            pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
-            # Reset  part
-            for i, token_ids in enumerate(masked_labels):
-                for token_id in token_ids:
-                    if "-" in token_id:
-                        continue
-                    token_id = int(token_id)
-                    # remove mask specific tokens
-                    if token_id in x[:, i]:
-                        pred_mask[:, i][x[:, i] == token_id] = 0
-        # define target words to predict
-        elif params.sample_alpha == 0:
+        if params.sample_alpha == 0:
             pred_mask = np.random.rand(slen, bs) <= params.word_pred
             pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
         else:
@@ -527,45 +515,23 @@ class Trainer(object):
         _x_real = x[pred_mask]
         _x_rand = _x_real.clone().random_(params.num_of_classes)
         _x_mask = _x_real.clone().fill_(params.mask_index)
-        try:
-            probs = torch.multinomial(params.pred_probs, len(_x_real), replacement=True)
-            _x = _x_mask * (probs == 0).long() + _x_real * (probs == 1).long() + _x_rand * (probs == 2).long()
-            x = x.masked_scatter(pred_mask, _x)
-        except Exception as e:
-            print(e)
+        probs = torch.multinomial(params.pred_probs, len(_x_real), replacement=True)
+        _x = _x_mask * (probs == 0).long() + _x_real * (probs == 1).long() + _x_rand * (probs == 2).long()
+        x = x.masked_scatter(pred_mask, _x)
 
         assert 0 <= x.min() <= x.max() < params.n_words
         assert x.size() == (slen, bs)
         assert pred_mask.size() == (slen, bs)
         return x, _x_real, pred_mask
 
-    def mask_out(self, x, lengths, masked_tokens=None, langs=None):
+    def mask_out(self, x, lengths):
         """
         Decide of random words to mask out, and what target they get assigned.
         """
         params = self.params
         slen, bs = x.size()
 
-        # define target words to predict
-        if masked_tokens is not None:
-            pred_mask = np.random.rand(slen, bs) <= params.word_pred
-            pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
-            # Reset english part
-            pred_mask[langs == params.lang2id["en"]] = 0
-            for i, token_ids in enumerate(masked_tokens):
-                masked_cnt = 0
-                for token_id in token_ids:
-                    # mask specific tokens
-                    if token_id in x[:, i]:
-                        if random.random() < 0.5:
-                            pred_mask[:, i][x[:, i] == token_id] = 1
-                            masked_cnt += 1
-                if masked_cnt == 0:
-                    pred_mask_recreated = np.random.rand(slen) <= params.word_pred
-                    pred_mask_recreated = torch.from_numpy(pred_mask_recreated.astype(np.bool))
-                    pred_mask[:, i] = pred_mask_recreated
-
-        elif params.sample_alpha == 0:
+        if params.sample_alpha == 0:
             pred_mask = np.random.rand(slen, bs) <= params.word_pred
             pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
         else:
@@ -584,12 +550,9 @@ class Trainer(object):
         _x_real = x[pred_mask]
         _x_rand = _x_real.clone().random_(params.n_words)
         _x_mask = _x_real.clone().fill_(params.mask_index)
-        try:
-            probs = torch.multinomial(params.pred_probs, len(_x_real), replacement=True)
-            _x = _x_mask * (probs == 0).long() + _x_real * (probs == 1).long() + _x_rand * (probs == 2).long()
-            x = x.masked_scatter(pred_mask, _x)
-        except Exception as e:
-            print(e)
+        probs = torch.multinomial(params.pred_probs, len(_x_real), replacement=True)
+        _x = _x_mask * (probs == 0).long() + _x_real * (probs == 1).long() + _x_rand * (probs == 2).long()
+        x = x.masked_scatter(pred_mask, _x)
 
         assert 0 <= x.min() <= x.max() < params.n_words
         assert x.size() == (slen, bs)
