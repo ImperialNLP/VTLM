@@ -89,8 +89,12 @@ class Trainer(object):
             [params.word_mask, params.word_keep, params.word_rand])
 
         # same for regions
+        # keep <do nothing> as a choice as well to simplify image masking ops
         params.region_pred_probs = torch.FloatTensor(
-            [params.region_mask, params.region_keep, params.region_rand])
+            [0.0, params.region_mask, params.region_keep, params.region_rand])
+        # multiply by the conditional prob
+        params.region_pred_probs.mul_(params.region_pred)
+        params.region_pred_probs[0] = 1 - params.region_pred_probs[1:].sum()
 
         # probabilty to predict a word
         counts = np.array(list(self.data['dico'].counts.values()))
@@ -563,34 +567,40 @@ class Trainer(object):
         """Mask random image features out of a sequence, similar to text
         counter-part."""
 
-        x = img_labels.t()
-        n_regions, bs = x.size()
-
         # Generate prediction mask
-        pred_mask = np.random.rand(n_regions, bs) <= self.params.region_pred
-        pred_mask = torch.from_numpy(pred_mask.astype(np.bool))
+        bs, n_regions = img_labels.size()
 
-        # an overlay with real prediction labels
-        y = x[pred_mask]
-
-        # an overlay with randomized labels
-        # NOTE: hard to implement at input side!
-        _x_rand = y.clone().random_(self.params.num_obj_labels)
-
-        # an overlay with masked inputs
-        _x_mask = y.clone().fill_(self.params.mask_index)
-
+        # create a full prob array of shape (bs, n_regions)
+        # 0: no change, no prediction
+        # 1: multiply the positions' features with 0 + predict labels (mask)
+        # 2: no change at input + predict labels (keep)
+        # 3: random features at input + predict labels (rand)
         probs = torch.multinomial(
-            self.params.region_pred_probs, len(y), replacement=True)
+            self.params.region_pred_probs, bs * n_regions, replacement=True)
+        probs = probs.view(bs, n_regions)
 
-        # blend the overlays accordingly to form the final masked input
-        _x = _x_mask.mul(probs.eq(0).long()) + \
-            y.mul(probs.eq(1).long()) + \
-            _x_rand.mul(probs.eq(2).long())
+        # positions where there'll be a prediction
+        pred_mask = probs > 0
 
-        img_labels = x.masked_scatter(pred_mask, _x)
+        # ground-truth labels
+        y = img_labels[pred_mask]
 
-        return img_boxes, img_feats, img_labels, y, pred_mask
+        # handle randomization
+        # shuffle all regions in the batch and pick random ones
+        shuf_region_order = torch.randperm(bs * n_regions)
+        feat_inventory = img_feats.view(-1, img_feats.size(-1))[shuf_region_order]
+        img_feats = img_feats.masked_scatter_(
+            probs.eq(3).unsqueeze(-1), feat_inventory)
+
+        # mask the features with 0
+        # NOTE: We can't mask it with <MASK> at this step because of
+        # dimension incompatibility (512 != 1536). So let's make them 0 now
+        # and then handle in transformer.py:fwd() if <MASK> is indeed requested
+        # to replace the regions
+        to_mask_positions = probs.eq(1).unsqueeze(-1)
+        img_feats.masked_fill_(to_mask_positions, 0.0)
+
+        return img_boxes, img_feats, y, pred_mask, to_mask_positions
 
     def generate_batch(self, lang1, lang2, name):
         """
@@ -914,21 +924,21 @@ class Trainer(object):
 
         # Get prediction masks
         x, y, txt_pred_mask = self.mask_out(x, lengths)
-        img_boxes, img_feats, img_labels, img_y, img_pred_mask = self.mask_out_image(
+        img_boxes, img_feats, img_y, img_pred_mask, img_mask_pos = self.mask_out_image(
             img_boxes, img_feats, img_labels)
 
         # cuda
         x, y, txt_pred_mask, lengths, positions, langs, image_langs = to_cuda(
             x, y, txt_pred_mask, lengths, positions, langs, image_langs)
 
-        img_boxes, img_feats, img_labels, img_y, img_pred_mask = to_cuda(
-            img_boxes, img_feats, img_labels, img_y, img_pred_mask)
+        img_boxes, img_feats, img_labels, img_y, img_pred_mask, img_mask_pos = to_cuda(
+            img_boxes, img_feats, img_labels, img_y, img_pred_mask, img_mask_pos)
 
         # forward / loss
         tensor = model(
             'fwd', x=x, lengths=lengths, positions=positions, causal=False,
             langs=langs, image_langs=image_langs,
-            img_boxes=img_boxes, img_feats=img_feats, img_labels=img_labels)
+            img_boxes=img_boxes, img_feats=img_feats, img_mask_pos=img_mask_pos)
 
         # slice the outputs back to feed into prediction head(s)
         if params.visual_first:
@@ -1143,8 +1153,8 @@ class EncDecTrainer(Trainer):
         # encode source sentence
         enc1 = self.encoder(
             'fwd', x=x1, lengths=len1, langs=langs1, causal=False,
-            image_langs=img_langs, img_boxes=img_boxes, img_feats=img_feats,
-            img_labels=img_labels).transpose(0, 1)
+            image_langs=img_langs, img_boxes=img_boxes,
+            img_feats=img_feats).transpose(0, 1)
 
         # decode target sentence
         dec2 = self.decoder(
