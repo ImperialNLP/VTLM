@@ -10,14 +10,12 @@ import os
 import subprocess
 import pickle as pkl
 from collections import OrderedDict
+
 import numpy as np
 import torch
+import sacrebleu
 
 from ..utils import to_cuda, restore_segmentation, concat_batches
-
-
-BLEU_SCRIPT_PATH = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'multi-bleu.perl')
-assert os.path.isfile(BLEU_SCRIPT_PATH)
 
 
 logger = getLogger()
@@ -53,16 +51,13 @@ def eval_moses_bleu(ref, hyp):
     """
     assert os.path.isfile(hyp)
     assert os.path.isfile(ref) or os.path.isfile(ref + '0')
-    assert os.path.isfile(BLEU_SCRIPT_PATH)
-    command = BLEU_SCRIPT_PATH + ' %s < %s'
-    p = subprocess.Popen(command % (ref, hyp), stdout=subprocess.PIPE, shell=True)
-    result = p.communicate()[0].decode("utf-8")
-    if result.startswith('BLEU'):
-        return float(result[7:result.index(',')])
-    else:
-        logger.warning('Impossible to parse BLEU score! "%s"' % result)
-        return -1
 
+    with open(hyp) as fh, open(ref) as rh:
+        hyps = fh.read().strip().split('\n')
+        refs = rh.read().strip().split('\n')
+        score = sacrebleu.corpus_bleu(hyps, [refs], tokenize='none').score
+
+    return score
 
 def kl_score(x):
     # assert np.abs(np.sum(x) - 1) < 1e-5
@@ -213,7 +208,7 @@ class Evaluator(object):
 
                 # convert to text
                 if params.mmt_steps:
-                    for (sent1, len1), (sent2, len2), _, _, _ in self.get_iterator(data_set, lang1, lang2):
+                    for (sent1, len1), (sent2, len2), _, _ in self.get_iterator(data_set, lang1, lang2):
                         lang1_txt.extend(convert_to_text(sent1, len1, self.dico, params))
                         lang2_txt.extend(convert_to_text(sent2, len2, self.dico, params))
                 else:
@@ -590,7 +585,7 @@ class EncDecEvaluator(Evaluator):
 
         for batch in self.get_iterator(data_set, lang1, lang2):
             # generate batch
-            _, _, (img_boxes, img_feats, img_labels), (x1, len1), (x2, len2) = batch
+            _, (img_boxes, img_feats, img_labels), (x1, len1), (x2, len2) = batch
             langs1 = x1.clone().fill_(lang1_id)
             langs2 = x2.clone().fill_(lang2_id)
             img_langs = torch.empty((params.num_of_regions, langs1.size(1))).long().fill_(img_id)
@@ -602,13 +597,13 @@ class EncDecEvaluator(Evaluator):
             assert len(y) == (len2 - 1).sum().item()
 
             # cuda
-            x1, len1, langs1, x2, len2, langs2, y, img_langs = to_cuda(
-                x1, len1, langs1, x2, len2, langs2, y, img_langs)
+            x1, len1, langs1, x2, len2, langs2, y, img_langs, img_boxes, img_feats = to_cuda(
+                x1, len1, langs1, x2, len2, langs2, y, img_langs, img_boxes, img_feats)
             # encode source sentence
             enc1 = encoder(
                 'fwd', x=x1, lengths=len1, langs=langs1,
                 image_langs=img_langs, causal=False,
-                img_boxes=img_boxes, img_feats=img_feats, img_labels=img_labels)
+                img_boxes=img_boxes, img_feats=img_feats)
 
             # encode source sentence
             enc1 = enc1.transpose(0, 1)
@@ -620,7 +615,8 @@ class EncDecEvaluator(Evaluator):
                 src_enc=enc1, src_len=len1 + params.num_of_regions)
 
             # loss
-            word_scores, loss = decoder('predict', tensor=dec2, pred_mask=pred_mask, y=y, get_scores=True)
+            word_scores, loss = decoder(
+                'predict', tensor=dec2, pred_mask=pred_mask, y=y, get_scores=True)
 
             # update stats
             n_words += y.size(0)

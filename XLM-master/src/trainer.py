@@ -1136,7 +1136,7 @@ class EncDecTrainer(Trainer):
         img_id = params.lang2id["img"]
 
         # generate batch
-        _, _, img_boxes, img_feats, img_labels, (x1, len1), (x2, len2) = self.get_batch('mmt', lang1, lang2)
+        _, (img_boxes, img_feats, img_labels), (x1, len1), (x2, len2) = self.get_batch('mmt', lang1, lang2)
 
         langs1 = x1.clone().fill_(lang1_id)
         langs2 = x2.clone().fill_(lang2_id)
@@ -1149,8 +1149,8 @@ class EncDecTrainer(Trainer):
         assert len(y) == (len2 - 1).sum().item()
 
         # cuda
-        x1, len1, langs1, x2, len2, langs2, y, img_langs = to_cuda(
-            x1, len1, langs1, x2, len2, langs2, y, img_langs)
+        x1, len1, langs1, x2, len2, langs2, y, img_langs, img_boxes, img_feats = to_cuda(
+            x1, len1, langs1, x2, len2, langs2, y, img_langs, img_boxes, img_feats)
 
         # encode source sentence
         enc1 = self.encoder(
