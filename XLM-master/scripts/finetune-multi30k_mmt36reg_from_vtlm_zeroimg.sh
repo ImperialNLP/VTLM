@@ -1,6 +1,6 @@
 #!/bin/bash
 DATA_PATH=/data2/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe/multi30k
-DUMP_PATH=/data/ozan/experiments/mmvc/mmvc_code/multi30k_mmt/from_tlm_decinit
+DUMP_PATH=/data/ozan/experiments/mmvc/mmvc_code_cam_ready/multi30k_mmt/from_vtlm_decinit_zeroimg
 FEAT_PATH=/data/ozan/datasets/multi30k/features/oidv4/avgpool
 
 CUR_DIR=`dirname $0`
@@ -29,13 +29,13 @@ L1=`echo $PAIR | cut -d'-' -f1`
 EPOCH=`wc -l ${DATA_PATH}/train.${PAIR}.$L1 | head -n1 | cut -d' ' -f1`
 BS=${BS:-64}
 LR=${LR:-0.00001}
-NAME="${CKPT_NAME}_ftune_bs${BS}_lr${LR}_8regs"
+NAME="${CKPT_NAME}_ftune_bs${BS}_lr${LR}_36regs"
 PREFIX=${PREFIX:-}
 DUMP_PATH="${DUMP_PATH}/${PREFIX}"
 
 CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 
-python $TRAIN --beam_size 1 --exp_name ${NAME} --dump_path ${DUMP_PATH} \
+ipython -i $TRAIN -- --beam_size 1 --exp_name ${NAME} --dump_path ${DUMP_PATH} \
   --reload_model "${CKPT},${CKPT}" --data_path ${DATA_PATH} --encoder_only false \
   --lgs 'en-de' --mmt_step "en-de" $PREV_ARGS \
   --dropout '0.2' --attention_dropout '0.1' --gelu_activation true \
@@ -43,4 +43,4 @@ python $TRAIN --beam_size 1 --exp_name ${NAME} --dump_path ${DUMP_PATH} \
   --epoch_size ${EPOCH} --eval_bleu true --max_epoch 500 \
   --stopping_criterion 'valid_en-de_mmt_bleu,20' --validation_metrics 'valid_en-de_mmt_bleu' \
   --region_feats_path $FEAT_PATH --image_names ${DATA_PATH} --visual_first true \
-  --num_of_regions 8 --init_dec_from_enc --reg_enc_bias false $@
+  --num_of_regions 36 --reg_enc_bias false --init_dec_from_enc $@
