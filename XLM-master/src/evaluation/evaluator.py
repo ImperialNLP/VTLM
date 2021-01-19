@@ -52,9 +52,15 @@ def eval_moses_bleu(ref, hyp):
     assert os.path.isfile(hyp)
     assert os.path.isfile(ref) or os.path.isfile(ref + '0')
 
+    hyps, refs = [], []
+
     with open(hyp) as fh, open(ref) as rh:
-        hyps = fh.read().strip().split('\n')
-        refs = rh.read().strip().split('\n')
+        for line in fh:
+            hyps.append(line.strip())
+
+        for line in rh:
+            refs.append(line.strip())
+
         score = sacrebleu.corpus_bleu(hyps, [refs], tokenize='none').score
 
     return score
