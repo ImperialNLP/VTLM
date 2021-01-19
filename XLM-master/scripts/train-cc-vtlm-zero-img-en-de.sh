@@ -4,7 +4,7 @@ FEAT_PATH="/data2/ozan/conceptual_captions/avgpool_features"
 DATA_PATH="/data2/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe"
 DUMP_PATH="/data/ozan/experiments/mmvc/mmvc_code_cam_ready"
 
-ipython -i train.py -- --exp_name vtlm_en_de_zero_img --dump_path $DUMP_PATH --data_path $DATA_PATH \
+python train.py --exp_name vtlm_en_de_zero_img --dump_path $DUMP_PATH --data_path $DATA_PATH \
   --lgs 'en-de' --clm_steps '' --mlm_steps 'en-de' \
   --emb_dim 512 --n_layers 6 --n_heads 8 --dropout '0.1' \
   --attention_dropout '0.1' --gelu_activation true --batch_size 64 --bptt 1 \

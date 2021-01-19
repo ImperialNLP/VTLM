@@ -4,7 +4,7 @@ FEAT_PATH="/data2/ozan/conceptual_captions/avgpool_features"
 DATA_PATH="/data2/ozan/conceptual_captions/mmvc_icl_data/mono.tok.bpe"
 DUMP_PATH="/data/ozan/experiments/mmvc/mmvc_code"
 
-ipython -i train.py -- --exp_name vmlm_en_v3 --dump_path $DUMP_PATH \
+python train.py --exp_name vmlm_en_v3 --dump_path $DUMP_PATH \
   --data_path $DATA_PATH \
   --lgs en-de --clm_steps '' --mlm_steps en --emb_dim 512 \
   --n_layers 6 --n_heads 8 --dropout '0.1' \
