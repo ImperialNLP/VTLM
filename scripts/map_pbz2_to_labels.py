@@ -9,7 +9,7 @@ import sys
 
 if __name__ == '__main__':
     # Load labels
-    label_fname = Path('~/git/Animal/metadata/oid_labels.pkl').expanduser()
+    label_fname = Path('metadata/oid_labels.pkl').expanduser()
     with open(str(label_fname), 'rb') as f:
         # 0-index labels [0, 600]
         labelmap = pkl.load(f)
