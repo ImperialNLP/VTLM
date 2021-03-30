@@ -1,7 +1,7 @@
 #!/bin/bash
 
-FEAT_PATH="/data2/ozan/conceptual_captions/avgpool_features"
-DATA_PATH="/data2/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe"
+FEAT_PATH="/data/ozan/conceptual_captions/avgpool_features"
+DATA_PATH="/data/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe"
 DUMP_PATH="/data/ozan/experiments/mmvc/mmvc_code_cam_ready"
 
 python train.py --exp_name vtlm_en_de_mask_img --dump_path $DUMP_PATH --data_path $DATA_PATH \

@@ -9,7 +9,7 @@ if [ -z $CKPT ]; then
 fi
 shift 1
 
-DATA_PATH="/data2/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe.nodot"
+DATA_PATH="/data/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe.nodot"
 DUMP_PATH=${CKPT/.pth/_probes_nodot/}
 TRAIN=`dirname $0`/../train.py
 

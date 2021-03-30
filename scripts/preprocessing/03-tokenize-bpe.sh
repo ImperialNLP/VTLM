@@ -4,8 +4,8 @@ NORM_PUNC=normalize-punctuation.perl
 REM_NON_PRINT_CHAR=remove-non-printing-char.perl
 TOKENIZER=tokenizer.perl
 LOWERCASE=lowercase.perl
-LOWER_REMOVE_ACCENT=${HOME}/git/Animal/XLM-master/tools/lowercase_and_remove_accent.py
-BINARIZE=${HOME}/git/Animal/XLM-master/preprocess.py
+LOWER_REMOVE_ACCENT="`dirname $0`/lowercase_and_remove_accent.py"
+BINARIZE="`dirname $0`/../../preprocess.py"
 
 
 inp_dir=parallel.raw

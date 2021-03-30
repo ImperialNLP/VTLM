@@ -1,5 +1,5 @@
 #!/bin/bash
-DATA_PATH=/data2/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe/multi30k
+DATA_PATH=/data/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe/multi30k
 DUMP_PATH=/data/ozan/experiments/mmvc/mmvc_code/multi30k_from_scratch_v5_do0.4_visualfirst
 FEAT_PATH=/data/ozan/datasets/multi30k/features/oidv4/avgpool
 

@@ -16,7 +16,7 @@ TRAIN=`realpath ${CUR_DIR}/../train.py`
 BS=${BS:-8}
 
 DATA_SUBDIR="mask_oid"
-DATA_PATH=/data2/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe/multi30k_${DATA_SUBDIR}
+DATA_PATH=/data/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe/multi30k_${DATA_SUBDIR}
 
 NAME="${CKPT/.pth/}_${DATA_SUBDIR}_beam${BS}/"
 python $TRAIN --beam_size $BS --exp_name $NAME --exp_id "${TEST_SET}" --dump_path $DUMP_PATH \
@@ -35,7 +35,7 @@ python $TRAIN --beam_size $BS --exp_name $NAME --exp_id "${TEST_SET}" --dump_pat
   --eval_bleu true --eval_only true --zero_mask_emb true $@
 
 DATA_SUBDIR="mask_removed"
-DATA_PATH=/data2/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe/multi30k_${DATA_SUBDIR}
+DATA_PATH=/data/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe/multi30k_${DATA_SUBDIR}
 
 NAME="${CKPT/.pth/}_${DATA_SUBDIR}_beam${BS}/"
 python $TRAIN --beam_size $BS --exp_name $NAME --exp_id "${TEST_SET}" --dump_path $DUMP_PATH \

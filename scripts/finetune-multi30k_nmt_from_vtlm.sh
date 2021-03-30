@@ -1,6 +1,6 @@
 #!/bin/bash
-DATA_PATH=/data2/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe/multi30k
-DUMP_PATH=/data/ozan/experiments/mmvc/mmvc_code/multi30k_nmt/from_vtlm_nodecinit
+DATA_PATH=/data/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe/multi30k
+DUMP_PATH=/data/ozan/experiments/mmvc/mmvc_code/multi30k_nmt/from_vtlm_decinit
 
 CUR_DIR=`dirname $0`
 TRAIN=`realpath ${CUR_DIR}/../train.py`
@@ -40,4 +40,5 @@ python $TRAIN --beam_size 1 --exp_name ${NAME} --dump_path ${DUMP_PATH} \
   --dropout '0.2' --attention_dropout '0.1' --gelu_activation true \
   --batch_size ${BS} --optimizer "adam,lr=${LR}" \
   --epoch_size ${EPOCH} --eval_bleu true --max_epoch 500 \
-  --stopping_criterion 'valid_en-de_mt_bleu,20' --validation_metrics 'valid_en-de_mt_bleu' $@
+  --stopping_criterion 'valid_en-de_mt_bleu,20' --validation_metrics 'valid_en-de_mt_bleu' \
+  --init_dec_from_enc $@

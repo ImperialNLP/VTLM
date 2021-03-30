@@ -1,6 +1,6 @@
 #!/bin/bash
-DATA_PATH=/data2/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe/multi30k
-DUMP_PATH=/data/ozan/experiments/mmvc/mmvc_code_cam_ready/multi30k_mmt/from_vtlm_decinit_maskimg
+DATA_PATH=/data/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe/multi30k
+DUMP_PATH=/data/ozan/experiments/mmvc/mmvc_code/multi30k_mmt/from_vtlm
 FEAT_PATH=/data/ozan/datasets/multi30k/features/oidv4/avgpool
 
 CUR_DIR=`dirname $0`
@@ -43,4 +43,4 @@ python $TRAIN --beam_size 1 --exp_name ${NAME} --dump_path ${DUMP_PATH} \
   --epoch_size ${EPOCH} --eval_bleu true --max_epoch 500 \
   --stopping_criterion 'valid_en-de_mmt_bleu,20' --validation_metrics 'valid_en-de_mmt_bleu' \
   --region_feats_path $FEAT_PATH --image_names ${DATA_PATH} --visual_first true \
-  --num_of_regions 36 --reg_enc_bias false --init_dec_from_enc $@
+  --num_of_regions 36 --reg_enc_bias false $@
