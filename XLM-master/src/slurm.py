@@ -91,7 +91,7 @@ def init_distributed_mode(params):
         # define master address and master port
         hostnames = subprocess.check_output(['scontrol', 'show', 'hostnames', os.environ['SLURM_JOB_NODELIST']])
         params.master_addr = hostnames.split()[0].decode('utf-8')
-        print(params.master_port,params.world_size)
+        print(params.master_port, params.world_size)
         assert -1 <= params.master_port <= 20000 or params.world_size == 1
         print(PREFIX + "Master address: %s" % params.master_addr)
         print(PREFIX + "Master port   : %i" % params.master_port)
@@ -153,7 +153,6 @@ def init_distributed_mode(params):
 
     # set GPU device
     torch.cuda.set_device(params.local_rank)
-    
 
     # initialize multi-GPU
     if params.multi_gpu:

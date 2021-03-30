@@ -65,6 +65,7 @@ def eval_moses_bleu(ref, hyp):
 
     return score
 
+
 def kl_score(x):
     # assert np.abs(np.sum(x) - 1) < 1e-5
     _x = x.copy()
@@ -524,8 +525,9 @@ class Evaluator(object):
             else:
                 sent_tensor = tensor[:-params.num_of_regions]
 
-            word_scores, loss = model('predict', tensor=sent_tensor,
-                pred_mask=pred_mask, y=y, get_scores=True)
+            word_scores, loss = model(
+                    'predict', tensor=sent_tensor,
+                    pred_mask=pred_mask, y=y, get_scores=True)
 
             # update stats
             n_words += len(y)

@@ -504,7 +504,6 @@ class TransformerModel(nn.Module):
                 # mask unnecessary attention weights
                 p_self.mul_(mask[:, None, :, None])
                 self.self_attn[i] = p_self.cpu().numpy()
-                avg_vis_att = self.self_attn[i][..., :36].sum() / (p_self.size(1) * mask.sum().item())
 
             # encoder attention (for decoder only)
             if self.is_decoder and src_enc is not None:
