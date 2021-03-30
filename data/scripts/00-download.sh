@@ -1,14 +1,31 @@
 #!/bin/bash
 
 CC_URL="https://zenodo.org/record/4646961/files/conceptual_captions_en_de.tar.bz2"
-M30K_FEATS_URL="https://zenodo.org/record/4646961/files/faster_rcnn_inception_resnet_v2_atrous_oid_v4_2018_12_12.tar.bz2"
-TF_OBJ_MODEL_URL="https://zenodo.org/record/4646961/files/multi30k_oidv4_features.tar.xz"
+M30K_FEATS_URL="https://zenodo.org/record/4646961/files/multi30k_oidv4_features.tar.xz"
+TF_OBJ_URL="https://zenodo.org/record/4646961/files/faster_rcnn_inception_resnet_v2_atrous_oid_v4_2018_12_12.tar.bz2"
+
+if [ ! -f "faster_rcnn_inception_resnet_v2_atrous_oid_v4_2018_12_12_ghconfig_reexport" ]; then
+  if [ ! -f `basename $TF_OBJ_URL` ]; then
+    wget $TF_OBJ_URL
+  fi
+  tar xvf `basename $TF_OBJ_URL`
+fi
 
 if [ ! -f "conceptual_captions/cc-en-de.tsv.train" ]; then
   if [ ! -f `basename $CC_URL` ]; then
-    # Download
     wget $CC_URL
   fi
-  # Extract
   tar xvf `basename $CC_URL`
+fi
+
+if [ ! -f "multi30k/features" ]; then
+  if [ ! -f `basename $M30K_FEATS_URL` ]; then
+    wget $M30K_FEATS_URL
+  fi
+  tar xvf `basename $M30K_FEATS_URL` -C multi30k --strip-components=1
+fi
+
+# Checkout Mosesdecoder
+if [ ! -d mosesdecoder ]; then
+  git clone https://github.com/moses-smt/mosesdecoder --depth 1
 fi
