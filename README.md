@@ -1,6 +1,7 @@
 # VTLM
+![vtlm](./vtlm.png)
 
-[(Read the paper (EACL 2021))](https://arxiv.org/pdf/2101.10044.pdf)
+[Read the paper (EACL 2021)](https://arxiv.org/pdf/2101.10044.pdf)
 
 Pre-trained language models have been shown to substantially improve performance in many natural language tasks. Although the early focus of such models was single language pre-training, recent advances have resulted in cross-lingual and visual pre-training meth- ods. In this paper, we combine these two approaches to learn visually-grounded cross-lingual representations. Specifically, we extend the [translation language modelling](https://github.com/facebookresearch/XLM) (Lample and Conneau, 2019) with masked region classification, and perform pre-training with three-way parallel vision & language corpora. We show that when fine-tuned for multimodal machine translation, these models obtain state-of-the-art performance. We also provide qualitative insights into the usefulness of the learned grounded representations.
 
