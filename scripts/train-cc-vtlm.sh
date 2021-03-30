@@ -1,6 +1,6 @@
 #!/bin/bash
 
-FEAT_PATH="/data/ozan/conceptual_captions/avgpool_features"
+FEAT_PATH="../data/conceptual_captions/features"
 DATA_PATH="/data/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe"
 DUMP_PATH="/data/ozan/experiments/mmvc/mmvc_code_bugfix"
 
