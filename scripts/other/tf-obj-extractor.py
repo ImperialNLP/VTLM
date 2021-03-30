@@ -44,7 +44,7 @@ def prepare_dict(output, class_offset=0, num_proposals=10000, pool=False):
         feats = d.pop('detection_features').reshape(d['num_detections'], -1, 1536)
 
         # mean pool over spatial dims
-        data['detection_features'] = feats.mean(1)
+        d['detection_features'] = feats.mean(1)
 
     return d
 
