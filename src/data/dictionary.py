@@ -10,6 +10,8 @@ import numpy as np
 import torch
 from logging import getLogger
 
+import tqdm
+
 
 logger = getLogger()
 
@@ -185,9 +187,7 @@ class Dictionary(object):
 
         # index sentences
         f = open(path, 'r', encoding='utf-8')
-        for i, line in enumerate(f):
-            if i % 1000000 == 0 and i > 0:
-                print(i)
+        for i, line in enumerate(tqdm.tqdm(f)):
             s = line.rstrip().split()
             # skip empty sentences
             if len(s) == 0:
