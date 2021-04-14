@@ -30,6 +30,32 @@ Pre-trained language models have been shown to substantially improve performance
 - Code paths for some of the original XLM tasks such as causal LM, back-translation, auto-encoding, etc.
   are not used/tested and probably broken due to refactoring.
 
+## Checkpoints
+
+If you need to experiment with pre-trained models or the fine-tuned NMTs/MMTs, you can download
+the set of checkpoints from [here](https://zenodo.org/record/4646961/files/vtlm_eacl21_checkpoints.tar.bz2).
+Once extracted, the contents are as follows:
+
+### Fine-tuned NMTs and MMTs (Table 1)
+
+TLM: Pre-train on CC & fine-tune on Multi30k
+  - NMT: `finetuned-nmt-over-tlm`
+  - MMT: `finetuned-mmt-over-tlm`
+
+VTLM: Pre-train on CC & fine-tune on Multi30k
+  - NMT: `finetuned-nmt-over-vtlm`
+  - MMT: `finetuned-mmt-over-vtlm`
+
+VTLM: Alternative (0% visual masking during pre-training)
+  - MMT: `finetuned-mmt-over-vtlm-alternative`
+
+(Each folder above contains 3 runs of pre-training and hence, 3 checkpoint files.)
+
+### TLM/VTLM pre-trained on CC
+
+The three pre-trained checkpoints used for the above models are included
+in the folder `pretrained-checkpoints`.
+
 ## Data Preparation
 We made some of the datasets and features accessible through [zenodo.org](https://zenodo.org/record/4646961).
 
