@@ -19,6 +19,17 @@ from .dictionary import BOS_WORD, EOS_WORD, PAD_WORD, UNK_WORD, MASK_WORD
 logger = getLogger()
 
 
+def read_image_list(root, split):
+    image_names = []
+    existing_indices = []
+    with open(os.path.join(root, f"{split}.order")) as img_names:
+        for i, line in enumerate(img_names):
+            line = line.strip() + '.pkl'
+            image_names.append(line)
+            existing_indices.append(i)
+    return existing_indices, image_names
+
+
 def process_binarized(data, params):
     """
     Process a binarized dataset and log main statistics.
@@ -189,13 +200,7 @@ def load_vmono_data(params, data):
             # load data / update dictionary parameters / update data
             mono_data = load_binarized(params.mono_dataset[lang][splt], params)
             image_names = []
-            existing_indices = []
-            with open(os.path.join(params.image_names, f"image_names.{splt}")) as img_names:
-                for i, line in enumerate(img_names):
-                    line = line.strip()
-                    line = line + ".pkl"
-                    image_names.append(line)
-                    existing_indices.append(i)
+            existing_indices, image_names = read_image_list(params.image_names, splt)
 
             set_dico_parameters(params, data, mono_data['dico'])
             existing_indices = np.array(existing_indices)
@@ -322,14 +327,7 @@ def load_vpara_data(params, data):
             src_path, tgt_path = params.para_dataset[(src, tgt)][splt]
             src_data = load_binarized(src_path, params)
             tgt_data = load_binarized(tgt_path, params)
-            image_names = []
-            existing_indices = []
-            with open(os.path.join(params.image_names, f"image_names.{splt}")) as img_names:
-                for i, line in enumerate(img_names):
-                    line = line.strip()
-                    line = line + ".pkl"
-                    image_names.append(line)
-                    existing_indices.append(i)
+            existing_indices, image_names = read_image_list(params.image_names, splt)
 
             # update dictionary parameters
             set_dico_parameters(params, data, src_data['dico'])

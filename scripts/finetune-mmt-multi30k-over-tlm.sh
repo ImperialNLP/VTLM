@@ -1,6 +1,10 @@
 #!/bin/bash
+
+# Finetunes an MMT on Multi30k by transferring weights from VTLM
+# This variant initializes the decoder's cross-attention layers from the encoder (--init_dec_from_enc)
+
 DATA_PATH=/data/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe/multi30k
-DUMP_PATH=/data/ozan/experiments/mmvc/mmvc_code_cam_ready/multi30k_mmt/from_vtlm_decinit_zeroimg
+DUMP_PATH=/data/ozan/experiments/mmvc/mmvc_code/multi30k_mmt/from_tlm_decinit
 FEAT_PATH=/data/ozan/datasets/multi30k/features/oidv4/avgpool
 
 CUR_DIR=`dirname $0`
@@ -29,7 +33,7 @@ L1=`echo $PAIR | cut -d'-' -f1`
 EPOCH=`wc -l ${DATA_PATH}/train.${PAIR}.$L1 | head -n1 | cut -d' ' -f1`
 BS=${BS:-64}
 LR=${LR:-0.00001}
-NAME="${CKPT_NAME}_ftune_bs${BS}_lr${LR}_36regs"
+NAME="${CKPT_NAME}_ftune_bs${BS}_lr${LR}"
 PREFIX=${PREFIX:-}
 DUMP_PATH="${DUMP_PATH}/${PREFIX}"
 

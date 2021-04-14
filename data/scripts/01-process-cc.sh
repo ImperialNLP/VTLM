@@ -18,10 +18,15 @@ BINARIZE="${ROOT}/../../preprocess.py"
 DATA_PATH="conceptual_captions"
 PREFIX="cc-en-de.tsv"
 
+if [ ! -f ${DATA_PATH}/${PREFIX}.train ]; then
+  echo "Please run scripts/00-download.sh first"
+  exit 1
+fi
+
 # Explode the TSVs
 for split in train valid test; do
   echo "Exploding TSV for ${split}"
-  cut -f1 < ${DATA_PATH}/${PREFIX}.${split} > ${DATA_PATH}/${split}.imgs
+  cut -f1 < ${DATA_PATH}/${PREFIX}.${split} > ${DATA_PATH}/${split}.order
   cut -f2 < ${DATA_PATH}/${PREFIX}.${split} > ${DATA_PATH}/${split}.urls
 
   # English is already tokenized

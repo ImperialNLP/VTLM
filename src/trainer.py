@@ -621,7 +621,7 @@ class Trainer(object):
                 x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index,
                 params.eos_index, reset_positions=False)
         else:
-            (x1, len1), (x2, len2) = self.get_batch(name, lang1, lang2)
+            _, (x1, len1), (x2, len2) = self.get_batch(name, lang1, lang2)
             x, lengths, positions, langs = concat_batches(
                 x1, len1, lang1_id, x2, len2, lang2_id, params.pad_index,
                 params.eos_index, reset_positions=True)
@@ -1087,7 +1087,7 @@ class EncDecTrainer(Trainer):
         lang1_id = params.lang2id[lang1]
         lang2_id = params.lang2id[lang2]
 
-        (x1, len1), (x2, len2) = self.get_batch('mt', lang1, lang2)
+        _, (x1, len1), (x2, len2) = self.get_batch('mt', lang1, lang2)
         langs1 = x1.clone().fill_(lang1_id)
         langs2 = x2.clone().fill_(lang2_id)
 

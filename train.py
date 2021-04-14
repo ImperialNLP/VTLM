@@ -31,9 +31,9 @@ def get_parser():
     parser = argparse.ArgumentParser(description="Language transfer")
 
     # main parameters
-    parser.add_argument("--dump_path", type=str, default="./dumped/",
+    parser.add_argument("--dump_path", type=str, default="./models/",
                         help="Experiment dump path")
-    parser.add_argument("--region_feats_path", type=str, default="/data/shared/ConceptualCaptions/fastrcnn_features_36/",
+    parser.add_argument("--region_feats_path", type=str, default="./data/conceptual_captions/features",
                         help="Path of the image region features.")
     parser.add_argument("--reg_enc_bias", type=bool_flag, default=True,
                         help="Enable bias for regional encodings.")
@@ -81,7 +81,7 @@ def get_parser():
                         help="Dropout in the attention layer")
     parser.add_argument("--gelu_activation", type=bool_flag, default=False,
                         help="Use a GELU activation instead of ReLU")
-    parser.add_argument("--visual_first", type=bool_flag, default=False,
+    parser.add_argument("--visual_first", type=bool_flag, default=True,
                         help="Plug visual features first in the sequence.")
     parser.add_argument("--visual_relu", type=bool_flag, default=True,
                         help="Use ReLU for visual feature projections.")
@@ -141,7 +141,7 @@ def get_parser():
                         help="Randomly blank input words (0 to disable)")
 
     # data
-    parser.add_argument("--data_path", type=str, default="data/conceptual_captions",
+    parser.add_argument("--data_path", type=str, default="./data/conceptual_captions",
                         help="Data path")
     parser.add_argument("--lgs", type=str, default="",
                         help="Languages (lg1-lg2-lg3 .. ex: en-fr-es-de)")
