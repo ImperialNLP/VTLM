@@ -1,14 +1,10 @@
 #!/bin/bash
 
-# Finetunes an MMT on Multi30k by transferring weights from VTLM
-# This variant initializes the decoder's cross-attention layers from the encoder (--init_dec_from_enc)
+# Takes a TLM checkpoint and finetunes it for Multi30k MMT
 
-DATA_PATH=/data/ozan/conceptual_captions/mmvc_icl_data/parallel.tok.bpe/multi30k
-DUMP_PATH=/data/ozan/experiments/mmvc/mmvc_code/multi30k_mmt/from_tlm_decinit
-FEAT_PATH=/data/ozan/datasets/multi30k/features/oidv4/avgpool
-
-CUR_DIR=`dirname $0`
-TRAIN=`realpath ${CUR_DIR}/../train.py`
+DATA_PATH="./data/multi30k"
+FEAT_PATH="./data/multi30k/features"
+DUMP_PATH="./models"
 
 CKPT="$1"
 
@@ -33,13 +29,11 @@ L1=`echo $PAIR | cut -d'-' -f1`
 EPOCH=`wc -l ${DATA_PATH}/train.${PAIR}.$L1 | head -n1 | cut -d' ' -f1`
 BS=${BS:-64}
 LR=${LR:-0.00001}
-NAME="${CKPT_NAME}_ftune_bs${BS}_lr${LR}"
+NAME="${CKPT_NAME}_ftune_mmt_tlm_bs${BS}_lr${LR}"
 PREFIX=${PREFIX:-}
 DUMP_PATH="${DUMP_PATH}/${PREFIX}"
 
-CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
-
-python $TRAIN --beam_size 1 --exp_name ${NAME} --dump_path ${DUMP_PATH} \
+python train.py --beam_size 8 --exp_name ${NAME} --dump_path ${DUMP_PATH} \
   --reload_model "${CKPT},${CKPT}" --data_path ${DATA_PATH} --encoder_only false \
   --lgs 'en-de' --mmt_step "en-de" $PREV_ARGS \
   --dropout '0.2' --attention_dropout '0.1' --gelu_activation true \
