@@ -81,7 +81,8 @@ $ scripts/00-download.sh
 - You need TensorFlow >= 2 to extract the features from the downloaded images. The script
   for this is `scripts/99-feature-extractor.py`. You can divide the image lists into
   as many sub-files as there are free GPUs on your machine, to parallelize the feature
-  extraction.
+  extraction. **NOTE:** You need to pass `--pool` argument to this script as the codebase
+  expects a feature vector per each image rather than a 3D convolutional map.
 
 ### Pre-processing the Corpora
 #### Conceptual Captions
